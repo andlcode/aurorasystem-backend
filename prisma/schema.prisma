@@ -1,0 +1,176 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum PersonType {
+  worker
+  participant
+}
+
+enum PersonStatus {
+  active
+  inactive
+}
+
+enum WorkerRole {
+  super_admin
+  admin
+  worker
+}
+
+enum ClassStatus {
+  active
+  inactive
+}
+
+enum AttendanceStatus {
+  present
+  absent
+  justified
+}
+
+model People {
+  id        String       @id @default(uuid())
+  fullName  String
+  birthDate DateTime?    @db.Date
+  phone     String?
+  email     String?
+  type      PersonType
+  status    PersonStatus @default(active)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  worker            Worker?
+  ownedClasses      Class[]           @relation("ClassOwner")
+  createdClasses    Class[]           @relation("ClassCreator")
+  classMemberships  ClassMembership[]
+  createdSessions   ClassSession[]
+  attendances       Attendance[]      @relation("ParticipantAttendance")
+  recordedAttendances Attendance[]    @relation("AttendanceRecorder")
+
+  authUser AuthUser?
+
+  @@index([fullName])
+  @@index([email])
+  @@index([phone])
+}
+
+model AuthUser {
+  id           String    @id @default(uuid())
+  username     String    @unique
+  email        String?   @unique
+  passwordHash String
+  personId     String    @unique
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  person               People                 @relation(fields: [personId], references: [id], onDelete: Cascade)
+  passwordResetTokens  PasswordResetToken[]
+
+  @@index([username])
+  @@index([email])
+}
+
+model PasswordResetToken {
+  id         String    @id @default(uuid())
+  userId     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model Worker {
+  personId  String     @id @unique
+  function  String
+  role      WorkerRole
+  notes     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  person People @relation(fields: [personId], references: [id], onDelete: Cascade)
+}
+
+model Class {
+  id             String      @id @default(uuid())
+  name           String
+  description    String?
+  dayOfWeek      Int
+  startTime      String
+  endTime        String?
+  ownerWorkerId  String
+  status         ClassStatus @default(active)
+  createdBy      String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  owner       People            @relation("ClassOwner", fields: [ownerWorkerId], references: [id])
+  creator     People?           @relation("ClassCreator", fields: [createdBy], references: [id])
+  memberships  ClassMembership[]
+  sessions     ClassSession[]
+
+  @@index([ownerWorkerId])
+}
+
+model ClassMembership {
+  classId    String
+  personId  String
+  active    Boolean   @default(true)
+  sinceDate DateTime? @db.Date
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  class_ Class @relation(fields: [classId], references: [id], onDelete: Cascade)
+  person People @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@id([classId, personId])
+  @@index([classId])
+  @@index([personId])
+}
+
+model ClassSession {
+  id          String   @id @default(uuid())
+  classId     String
+  sessionDate DateTime @db.Date
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  class_     Class       @relation(fields: [classId], references: [id], onDelete: Cascade)
+  creator    People      @relation(fields: [createdBy], references: [id])
+  attendances Attendance[]
+
+  @@unique([classId, sessionDate])
+  @@index([classId])
+  @@index([sessionDate])
+}
+
+model Attendance {
+  id                  String           @id @default(uuid())
+  sessionId           String
+  participantId       String
+  status              AttendanceStatus
+  justificationReason String?
+  recordedBy          String
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  session      ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  participant  People       @relation("ParticipantAttendance", fields: [participantId], references: [id], onDelete: Cascade)
+  recorder     People       @relation("AttendanceRecorder", fields: [recordedBy], references: [id])
+
+  @@unique([sessionId, participantId])
+  @@index([sessionId])
+  @@index([participantId])
+}
