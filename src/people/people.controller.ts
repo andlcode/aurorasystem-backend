@@ -5,7 +5,7 @@ import {
   listPeopleQuerySchema,
   patchPeopleSchema,
 } from "./people.dto";
-import type { PersonType, WorkerRole } from "@prisma/client";
+import type { PersonType, Prisma, WorkerRole } from "@prisma/client";
 
 export async function createPeople(req: Request, res: Response) {
   const parsed = createPeopleSchema.safeParse(req.body);
@@ -49,7 +49,7 @@ export async function listPeople(req: Request, res: Response) {
   }
   const { type, q } = parsed.data;
 
-  const where: Parameters<typeof prisma.people.findMany>[0]["where"] = {};
+  const where: Prisma.PeopleWhereInput = {};
 
   if (type) {
     where.type = type as PersonType;
