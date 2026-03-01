@@ -30,6 +30,7 @@ app.use("/sessions", sessions_routes_1.sessionsRoutes);
 app.use("/stats", stats_routes_1.statsRoutes);
 app.use(errorHandler_1.errorHandler);
 app.listen(PORT, () => {
-    console.log(`Servidor rodando em http://localhost:${PORT}`);
+    console.log(`[Server] Aplicação iniciada com sucesso em http://localhost:${PORT}`);
+    console.log(`[Server] Ambiente: ${process.env.NODE_ENV ?? "development"}`);
 });
 //# sourceMappingURL=index.js.map

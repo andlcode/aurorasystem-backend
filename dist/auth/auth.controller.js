@@ -159,8 +159,10 @@ async function resetPassword(req, res) {
     });
 }
 async function register(req, res) {
+    console.log("[Auth] POST /auth/register - requisição recebida");
     const parsed = auth_dto_1.registerSchema.safeParse(req.body);
     if (!parsed.success) {
+        console.log("[Auth] POST /auth/register - validação falhou:", parsed.error.errors);
         res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
         return;
     }
@@ -174,9 +176,11 @@ async function register(req, res) {
         },
     });
     if (existing) {
+        console.log("[Auth] POST /auth/register - username ou e-mail já cadastrado:", data.username);
         res.status(409).json({ error: "Username ou e-mail já cadastrado" });
         return;
     }
+    console.log("[Auth] POST /auth/register - criando usuário:", data.username);
     const passwordHash = await (0, hash_1.hashPassword)(data.password);
     const result = await prisma_1.prisma.$transaction(async (tx) => {
         const person = await tx.people.create({
@@ -203,6 +207,7 @@ async function register(req, res) {
         });
         return person;
     });
+    console.log("[Auth] POST /auth/register - usuário criado com sucesso:", result.id, data.username);
     res.status(201).json({
         user: {
             personId: result.id,

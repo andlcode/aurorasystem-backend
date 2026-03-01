@@ -32,5 +32,6 @@ app.use("/stats", statsRoutes);
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-  console.log(`Servidor rodando em http://localhost:${PORT}`);
+  console.log(`[Server] Aplicação iniciada com sucesso em http://localhost:${PORT}`);
+  console.log(`[Server] Ambiente: ${process.env.NODE_ENV ?? "development"}`);
 });
