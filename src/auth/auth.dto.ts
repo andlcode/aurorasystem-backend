@@ -25,3 +25,16 @@ export const resetPasswordSchema = z.object({
 });
 
 export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
+
+const workerRoleSchema = z.enum(["super_admin", "admin", "worker"]);
+
+export const registerSchema = z.object({
+  fullName: z.string().min(1, "Nome completo é obrigatório"),
+  username: z.string().min(1, "Username é obrigatório"),
+  email: z.preprocess((v) => (v === "" ? undefined : v), z.string().email().optional()),
+  password: passwordStrength,
+  function: z.string().min(1, "Função é obrigatória"),
+  role: workerRoleSchema.default("worker"),
+});
+
+export type RegisterInput = z.infer<typeof registerSchema>;

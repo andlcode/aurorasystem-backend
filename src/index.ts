@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import { corsMiddleware } from "./middleware/cors";
 import { errorHandler } from "./middleware/errorHandler";
 import { authRoutes } from "./auth/auth.routes";
 import { classesRoutes } from "./classes/classes.routes";
@@ -10,6 +11,8 @@ import { statsRoutes } from "./stats/stats.routes";
 const app = express();
 const PORT = process.env.PORT ?? 3000;
 
+app.set("trust proxy", 1);
+app.use(corsMiddleware);
 app.use(express.json());
 
 app.get("/", (_req, res) => {

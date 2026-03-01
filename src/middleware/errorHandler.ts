@@ -14,6 +14,10 @@ export function errorHandler(
   }
 
   if (err instanceof Error) {
+    if (err.message === "Not allowed by CORS") {
+      res.status(403).json({ error: "Origem não permitida" });
+      return;
+    }
     if (err.message.includes("não encontrado") || err.message.includes("not found")) {
       res.status(404).json({ error: err.message });
       return;

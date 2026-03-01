@@ -8,7 +8,9 @@ import {
   loginSchema,
   forgotPasswordSchema,
   resetPasswordSchema,
+  registerSchema,
 } from "./auth.dto";
+import type { WorkerRole } from "@prisma/client";
 
 const JWT_EXPIRES_IN = "7d";
 
@@ -117,7 +119,13 @@ export async function forgotPassword(req: Request, res: Response) {
   const tokenHash = hashToken(token);
   const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
 
-  const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:5173";
+  let frontendUrl = process.env.FRONTEND_URL;
+  if (!frontendUrl) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[Auth] FRONTEND_URL não configurado em produção. Links de reset usarão fallback localhost.");
+    }
+    frontendUrl = "http://localhost:5173";
+  }
   const resetLink = `${frontendUrl}/reset-password?token=${token}`;
 
   await prisma.passwordResetToken.create({
@@ -176,5 +184,71 @@ export async function resetPassword(req: Request, res: Response) {
 
   res.status(200).json({
     message: "Senha alterada com sucesso. Faça login com a nova senha.",
+  });
+}
+
+export async function register(req: Request, res: Response) {
+  console.log("[Auth] POST /auth/register - requisição recebida");
+  const parsed = registerSchema.safeParse(req.body);
+  if (!parsed.success) {
+    console.log("[Auth] POST /auth/register - validação falhou:", parsed.error.errors);
+    res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
+    return;
+  }
+  const data = parsed.data;
+
+  const existing = await prisma.authUser.findFirst({
+    where: {
+      OR: [
+        { username: { equals: data.username, mode: "insensitive" } },
+        ...(data.email ? [{ email: data.email }, { person: { email: data.email } }] : []),
+      ],
+    },
+  });
+  if (existing) {
+    console.log("[Auth] POST /auth/register - username ou e-mail já cadastrado:", data.username);
+    res.status(409).json({ error: "Username ou e-mail já cadastrado" });
+    return;
+  }
+
+  console.log("[Auth] POST /auth/register - criando usuário:", data.username);
+  const passwordHash = await hashPassword(data.password);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const person = await tx.people.create({
+      data: {
+        fullName: data.fullName,
+        email: data.email ?? null,
+        type: "worker",
+        worker: {
+          create: {
+            function: data.function,
+            role: data.role as WorkerRole,
+          },
+        },
+      },
+      include: { worker: true },
+    });
+
+    await tx.authUser.create({
+      data: {
+        username: data.username,
+        email: data.email ?? null,
+        passwordHash,
+        personId: person.id,
+      },
+    });
+
+    return person;
+  });
+
+  console.log("[Auth] POST /auth/register - usuário criado com sucesso:", result.id, data.username);
+  res.status(201).json({
+    user: {
+      personId: result.id,
+      username: data.username,
+      role: result.worker!.role,
+      fullName: result.fullName,
+    },
   });
 }
