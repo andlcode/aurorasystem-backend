@@ -9,7 +9,7 @@ import { sessionsRoutes } from "./sessions/sessions.routes";
 import { statsRoutes } from "./stats/stats.routes";
 
 const app = express();
-const PORT = process.env.PORT ?? 3000;
+const PORT = process.env.PORT || 3000;
 
 app.set("trust proxy", 1);
 app.use(corsMiddleware);
@@ -32,6 +32,5 @@ app.use("/stats", statsRoutes);
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-  console.log(`[Server] Aplicação iniciada com sucesso em http://localhost:${PORT}`);
-  console.log(`[Server] Ambiente: ${process.env.NODE_ENV ?? "development"}`);
+  console.log(`[Server] Running on port ${PORT}`);
 });
