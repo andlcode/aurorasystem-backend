@@ -13,7 +13,6 @@ const people_routes_1 = require("./people/people.routes");
 const sessions_routes_1 = require("./sessions/sessions.routes");
 const stats_routes_1 = require("./stats/stats.routes");
 const app = (0, express_1.default)();
-const PORT = process.env.PORT ?? 3000;
 app.set("trust proxy", 1);
 app.use(cors_1.corsMiddleware);
 app.use(express_1.default.json());
@@ -29,8 +28,8 @@ app.use("/classes", classes_routes_1.classesRoutes);
 app.use("/sessions", sessions_routes_1.sessionsRoutes);
 app.use("/stats", stats_routes_1.statsRoutes);
 app.use(errorHandler_1.errorHandler);
-app.listen(PORT, () => {
-    console.log(`[Server] Aplicação iniciada com sucesso em http://localhost:${PORT}`);
-    console.log(`[Server] Ambiente: ${process.env.NODE_ENV ?? "development"}`);
+const PORT = Number(process.env.PORT) || 3000;
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`[Server] Running on PORT ${PORT}`);
 });
 //# sourceMappingURL=index.js.map

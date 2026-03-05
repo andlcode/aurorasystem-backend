@@ -7,9 +7,11 @@ import { classesRoutes } from "./classes/classes.routes";
 import { peopleRoutes } from "./people/people.routes";
 import { sessionsRoutes } from "./sessions/sessions.routes";
 import { statsRoutes } from "./stats/stats.routes";
+import { on } from "events";
+import { Server } from "http";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
 
 app.set("trust proxy", 1);
 app.use(corsMiddleware);
@@ -30,7 +32,8 @@ app.use("/sessions", sessionsRoutes);
 app.use("/stats", statsRoutes);
 
 app.use(errorHandler);
+const PORT = Number(process.env.PORT) || 3000;
 
-app.listen(PORT, () => {
-  console.log(`[Server] Running on port ${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`[Server] Running on PORT ${PORT}`);
 });
