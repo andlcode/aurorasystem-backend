@@ -11,8 +11,6 @@ import { on } from "events";
 import { Server } from "http";
 
 const app = express();
-process.on("unhandledRejection", (err) => console.error("unhandledRejection:", err));
-process.on("uncaughtException", (err) => console.error("uncaughtException:", err));
 
 app.set("trust proxy", 1);
 app.use(corsMiddleware);
@@ -33,7 +31,12 @@ app.use("/sessions", sessionsRoutes);
 app.use("/stats", statsRoutes);
 
 app.use(errorHandler);
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = parseInt(process.env.PORT ?? "", 10);
+
+if (!PORT) {
+  console.error("❌ PORT env var not set. Railway Web Services require PORT.");
+  process.exit(1);
+}
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`[Server] Running on PORT ${PORT}`);
