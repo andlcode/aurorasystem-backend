@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 
 /**
- * Middleware que exige admin/super_admin OU ser o owner da turma.
+ * Middleware que exige evangelizador/super_admin OU ser o responsável da turma.
  * Deve ser usado após authJwt. Usa req.user. O :id deve ser o classId.
  */
 export async function requireClassOwnerOrAdmin(
@@ -17,14 +17,14 @@ export async function requireClassOwnerOrAdmin(
   }
   const classId = req.params.id;
 
-  if (user.role === "admin" || user.role === "super_admin") {
+  if (user.role === "evangelizador" || user.role === "super_admin") {
     next();
     return;
   }
 
   const class_ = await prisma.class.findUnique({
     where: { id: classId },
-    select: { ownerWorkerId: true },
+    select: { responsibleUserId: true },
   });
 
   if (!class_) {
@@ -32,7 +32,7 @@ export async function requireClassOwnerOrAdmin(
     return;
   }
 
-  if (class_.ownerWorkerId !== user.personId) {
+  if (class_.responsibleUserId !== user.personId) {
     res.status(403).json({ error: "Sem permissão para editar esta turma" });
     return;
   }

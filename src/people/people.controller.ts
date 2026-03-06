@@ -26,6 +26,7 @@ export async function createPeople(req: Request, res: Response) {
       phone: data.phone ?? null,
       email: data.email ?? null,
       type: data.type as PersonType,
+      status: (data.status ?? "active") as "active" | "inactive",
       ...(data.type === "worker" && {
         worker: {
           create: {
@@ -73,6 +74,22 @@ export async function listPeople(req: Request, res: Response) {
   res.json(people);
 }
 
+export async function getPeopleById(req: Request, res: Response) {
+  const { id } = req.params;
+
+  const person = await prisma.people.findUnique({
+    where: { id },
+    include: { worker: true },
+  });
+
+  if (!person) {
+    res.status(404).json({ error: "Pessoa não encontrada" });
+    return;
+  }
+
+  res.json(person);
+}
+
 export async function patchPeople(req: Request, res: Response) {
   const { id } = req.params;
   const parsed = patchPeopleSchema.safeParse(req.body);
@@ -92,6 +109,11 @@ export async function patchPeople(req: Request, res: Response) {
     return;
   }
 
+  if (existing.type === "participant" && userRole !== "super_admin") {
+    res.status(403).json({ error: "Somente super_admin pode editar participantes" });
+    return;
+  }
+
   if (!existing.worker && (data.function != null || data.role != null)) {
     res.status(400).json({
       error: "function e role só podem ser editados para pessoas do tipo worker",
@@ -99,8 +121,8 @@ export async function patchPeople(req: Request, res: Response) {
     return;
   }
 
-  if (data.role === "admin" && userRole !== "super_admin") {
-    res.status(403).json({ error: "Somente super_admin pode promover para admin" });
+  if (data.role === "evangelizador" && userRole !== "super_admin") {
+    res.status(403).json({ error: "Somente super_admin pode promover para evangelizador" });
     return;
   }
 

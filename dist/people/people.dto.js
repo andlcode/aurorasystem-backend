@@ -4,7 +4,7 @@ exports.patchPeopleSchema = exports.listPeopleQuerySchema = exports.createPeople
 const zod_1 = require("zod");
 const personTypeEnum = zod_1.z.enum(["worker", "participant"]);
 const personStatusEnum = zod_1.z.enum(["active", "inactive"]);
-const workerRoleEnum = zod_1.z.enum(["super_admin", "admin", "worker"]);
+const workerRoleEnum = zod_1.z.enum(["super_admin", "evangelizador", "worker"]);
 const emailSchema = zod_1.z.string().email("Email inválido").optional().nullable();
 const phoneSchema = zod_1.z.string().optional().nullable();
 exports.createPeopleSchema = zod_1.z
@@ -14,6 +14,7 @@ exports.createPeopleSchema = zod_1.z
     phone: phoneSchema,
     email: emailSchema,
     type: personTypeEnum,
+    status: personStatusEnum.optional(),
     function: zod_1.z.string().min(1).optional(),
     role: workerRoleEnum.optional(),
 })

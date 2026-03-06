@@ -8,7 +8,7 @@ const dateUtils_1 = require("../utils/dateUtils");
 async function getOverview(req, res) {
     const { start, end } = (0, dateUtils_1.getCurrentMonthRangeBahia)();
     const [totalTurmasAtivas, totalParticipantesAtivos, totalTrabalhadoresAtivos, sessoesNoMesAtual, attendances,] = await Promise.all([
-        prisma_1.prisma.class.count({ where: { status: "active" } }),
+        prisma_1.prisma.class.count(),
         prisma_1.prisma.people.count({
             where: { type: "participant", status: "active" },
         }),
@@ -46,12 +46,8 @@ async function getOverview(req, res) {
 async function getClassesStats(req, res) {
     const { start, end } = (0, dateUtils_1.getCurrentMonthRangeBahia)();
     const classes = await prisma_1.prisma.class.findMany({
-        where: { status: "active" },
         include: {
-            memberships: {
-                where: { active: true, person: { type: "participant" } },
-                select: { personId: true },
-            },
+            participants: { select: { participantId: true } },
             sessions: {
                 where: { sessionDate: { gte: start, lte: end } },
                 include: {
@@ -61,7 +57,7 @@ async function getClassesStats(req, res) {
         },
     });
     const classesStats = classes.map((c) => {
-        const participantesAtivos = c.memberships.length;
+        const participantesAtivos = c.participants.length;
         let present = 0;
         let absent = 0;
         let justified = 0;

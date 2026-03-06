@@ -9,19 +9,25 @@ router.use(authJwt);
 
 router.post(
   "/",
-  requireRole("admin", "super_admin", "worker"),
+  requireRole("evangelizador", "super_admin", "worker"),
   asyncHandler(peopleController.createPeople)
 );
 
 router.get(
   "/",
-  requireRole("admin", "super_admin", "worker"),
+  requireRole("evangelizador", "super_admin", "worker"),
   asyncHandler(peopleController.listPeople)
+);
+
+router.get(
+  "/:id",
+  requireRole("evangelizador", "super_admin", "worker"),
+  asyncHandler(peopleController.getPeopleById)
 );
 
 router.patch(
   "/:id",
-  requireRole("admin", "super_admin"),
+  requireRole("evangelizador", "super_admin"),
   asyncHandler(peopleController.patchPeople)
 );
 

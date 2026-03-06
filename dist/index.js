@@ -15,6 +15,7 @@ const stats_routes_1 = require("./stats/stats.routes");
 const app = (0, express_1.default)();
 app.set("trust proxy", 1);
 app.use(cors_1.corsMiddleware);
+app.options("*", cors_1.corsMiddleware);
 app.use(express_1.default.json());
 app.get("/", (_req, res) => {
     res.json({ message: "API funcionando!" });
@@ -28,7 +29,11 @@ app.use("/classes", classes_routes_1.classesRoutes);
 app.use("/sessions", sessions_routes_1.sessionsRoutes);
 app.use("/stats", stats_routes_1.statsRoutes);
 app.use(errorHandler_1.errorHandler);
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = parseInt(process.env.PORT ?? "", 10);
+if (!PORT) {
+    console.error("❌ PORT env var not set. Railway Web Services require PORT.");
+    process.exit(1);
+}
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`[Server] Running on PORT ${PORT}`);
 });

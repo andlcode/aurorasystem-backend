@@ -5,54 +5,61 @@ export declare const createPeopleSchema: z.ZodEffects<z.ZodEffects<z.ZodObject<{
     phone: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     email: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     type: z.ZodEnum<["worker", "participant"]>;
+    status: z.ZodOptional<z.ZodEnum<["active", "inactive"]>>;
     function: z.ZodOptional<z.ZodString>;
-    role: z.ZodOptional<z.ZodEnum<["super_admin", "admin", "worker"]>>;
+    role: z.ZodOptional<z.ZodEnum<["super_admin", "evangelizador", "worker"]>>;
 }, "strip", z.ZodTypeAny, {
     type: "worker" | "participant";
     fullName: string;
     function?: string | undefined;
+    status?: "active" | "inactive" | undefined;
     email?: string | null | undefined;
-    role?: "super_admin" | "admin" | "worker" | undefined;
+    role?: "super_admin" | "evangelizador" | "worker" | undefined;
     birthDate?: string | null | undefined;
     phone?: string | null | undefined;
 }, {
     type: "worker" | "participant";
     fullName: string;
     function?: string | undefined;
+    status?: "active" | "inactive" | undefined;
     email?: string | null | undefined;
-    role?: "super_admin" | "admin" | "worker" | undefined;
+    role?: "super_admin" | "evangelizador" | "worker" | undefined;
     birthDate?: string | null | undefined;
     phone?: string | null | undefined;
 }>, {
     type: "worker" | "participant";
     fullName: string;
     function?: string | undefined;
+    status?: "active" | "inactive" | undefined;
     email?: string | null | undefined;
-    role?: "super_admin" | "admin" | "worker" | undefined;
+    role?: "super_admin" | "evangelizador" | "worker" | undefined;
     birthDate?: string | null | undefined;
     phone?: string | null | undefined;
 }, {
     type: "worker" | "participant";
     fullName: string;
     function?: string | undefined;
+    status?: "active" | "inactive" | undefined;
     email?: string | null | undefined;
-    role?: "super_admin" | "admin" | "worker" | undefined;
+    role?: "super_admin" | "evangelizador" | "worker" | undefined;
     birthDate?: string | null | undefined;
     phone?: string | null | undefined;
 }>, {
     type: "worker" | "participant";
     fullName: string;
     function?: string | undefined;
+    status?: "active" | "inactive" | undefined;
     email?: string | null | undefined;
-    role?: "super_admin" | "admin" | "worker" | undefined;
+    role?: "super_admin" | "evangelizador" | "worker" | undefined;
     birthDate?: string | null | undefined;
     phone?: string | null | undefined;
 }, {
     type: "worker" | "participant";
     fullName: string;
     function?: string | undefined;
+    status?: "active" | "inactive" | undefined;
     email?: string | null | undefined;
-    role?: "super_admin" | "admin" | "worker" | undefined;
+    role?: "super_admin" | "evangelizador" | "worker" | undefined;
     birthDate?: string | null | undefined;
     phone?: string | null | undefined;
 }>;
@@ -75,13 +82,13 @@ export declare const patchPeopleSchema: z.ZodEffects<z.ZodObject<{
     email: z.ZodNullable<z.ZodOptional<z.ZodString>>;
     status: z.ZodOptional<z.ZodEnum<["active", "inactive"]>>;
     function: z.ZodOptional<z.ZodString>;
-    role: z.ZodOptional<z.ZodEnum<["super_admin", "admin", "worker"]>>;
+    role: z.ZodOptional<z.ZodEnum<["super_admin", "evangelizador", "worker"]>>;
 }, "strip", z.ZodTypeAny, {
     function?: string | undefined;
     status?: "active" | "inactive" | undefined;
     fullName?: string | undefined;
     email?: string | null | undefined;
-    role?: "super_admin" | "admin" | "worker" | undefined;
+    role?: "super_admin" | "evangelizador" | "worker" | undefined;
     birthDate?: string | null | undefined;
     phone?: string | null | undefined;
 }, {
@@ -89,7 +96,7 @@ export declare const patchPeopleSchema: z.ZodEffects<z.ZodObject<{
     status?: "active" | "inactive" | undefined;
     fullName?: string | undefined;
     email?: string | null | undefined;
-    role?: "super_admin" | "admin" | "worker" | undefined;
+    role?: "super_admin" | "evangelizador" | "worker" | undefined;
     birthDate?: string | null | undefined;
     phone?: string | null | undefined;
 }>, {
@@ -97,7 +104,7 @@ export declare const patchPeopleSchema: z.ZodEffects<z.ZodObject<{
     status?: "active" | "inactive" | undefined;
     fullName?: string | undefined;
     email?: string | null | undefined;
-    role?: "super_admin" | "admin" | "worker" | undefined;
+    role?: "super_admin" | "evangelizador" | "worker" | undefined;
     birthDate?: string | null | undefined;
     phone?: string | null | undefined;
 }, {
@@ -105,7 +112,7 @@ export declare const patchPeopleSchema: z.ZodEffects<z.ZodObject<{
     status?: "active" | "inactive" | undefined;
     fullName?: string | undefined;
     email?: string | null | undefined;
-    role?: "super_admin" | "admin" | "worker" | undefined;
+    role?: "super_admin" | "evangelizador" | "worker" | undefined;
     birthDate?: string | null | undefined;
     phone?: string | null | undefined;
 }>;

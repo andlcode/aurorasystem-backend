@@ -18,7 +18,7 @@ exports.resetPasswordSchema = zod_1.z.object({
     token: zod_1.z.string().min(1, "Token é obrigatório"),
     newPassword: passwordStrength,
 });
-const workerRoleSchema = zod_1.z.enum(["super_admin", "admin", "worker"]);
+const workerRoleSchema = zod_1.z.enum(["super_admin", "evangelizador", "worker"]);
 exports.registerSchema = zod_1.z.object({
     fullName: zod_1.z.string().min(1, "Nome completo é obrigatório"),
     username: zod_1.z.string().min(1, "Username é obrigatório"),

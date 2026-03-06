@@ -11,13 +11,13 @@ router.use(authJwt);
 
 router.get(
   "/overview",
-  requireRole("admin", "super_admin"),
+  requireRole("evangelizador", "super_admin"),
   asyncHandler(statsController.getOverview)
 );
 
 router.get(
   "/classes",
-  requireRole("admin", "super_admin"),
+  requireRole("evangelizador", "super_admin"),
   asyncHandler(statsController.getClassesStats)
 );
 

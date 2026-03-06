@@ -11,13 +11,13 @@ router.use(authJwt);
 
 router.get(
   "/responsibles",
-  requireRole("admin", "super_admin"),
+  requireRole("evangelizador", "super_admin"),
   asyncHandler(classesController.listResponsibles)
 );
 
 router.post(
   "/",
-  requireRole("admin", "super_admin"),
+  requireRole("evangelizador", "super_admin"),
   asyncHandler(classesController.createClass)
 );
 
@@ -27,29 +27,35 @@ router.get(
   asyncHandler(classesController.listClasses)
 );
 
+router.get(
+  "/:id/participants",
+  requireAuth,
+  asyncHandler(classesController.listParticipants)
+);
+
+router.post(
+  "/:id/participants",
+  requireRole("super_admin"),
+  asyncHandler(classesController.addParticipant)
+);
+
+router.delete(
+  "/:id/participants/:participantId",
+  requireRole("super_admin"),
+  asyncHandler(classesController.removeParticipant)
+);
+
+router.get(
+  "/:id",
+  requireAuth,
+  asyncHandler(classesController.getClassById)
+);
+
 router.patch(
   "/:id",
   requireAuth,
   asyncHandler(requireClassOwnerOrAdmin),
   asyncHandler(classesController.patchClass)
-);
-
-router.post(
-  "/:id/members",
-  requireRole("admin", "super_admin"),
-  asyncHandler(classesController.addMember)
-);
-
-router.get(
-  "/:id/members",
-  requireAuth,
-  asyncHandler(classesController.listMembers)
-);
-
-router.delete(
-  "/:id/members/:personId",
-  requireRole("admin", "super_admin"),
-  asyncHandler(classesController.removeMember)
 );
 
 router.post(

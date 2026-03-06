@@ -1,64 +1,46 @@
 import { z } from "zod";
 export declare const createClassSchema: z.ZodObject<{
     name: z.ZodString;
-    description: z.ZodNullable<z.ZodOptional<z.ZodString>>;
-    dayOfWeek: z.ZodNumber;
-    startTime: z.ZodEffects<z.ZodString, string, string>;
-    endTime: z.ZodNullable<z.ZodOptional<z.ZodEffects<z.ZodString, string, string>>>;
-    ownerWorkerId: z.ZodString;
+    day: z.ZodNumber;
+    time: z.ZodEffects<z.ZodString, string, string>;
+    responsibleUserId: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     name: string;
-    dayOfWeek: number;
-    startTime: string;
-    ownerWorkerId: string;
-    description?: string | null | undefined;
-    endTime?: string | null | undefined;
+    day: number;
+    time: string;
+    responsibleUserId: string;
 }, {
     name: string;
-    dayOfWeek: number;
-    startTime: string;
-    ownerWorkerId: string;
-    description?: string | null | undefined;
-    endTime?: string | null | undefined;
+    day: number;
+    time: string;
+    responsibleUserId: string;
 }>;
 export type CreateClassInput = z.infer<typeof createClassSchema>;
 export declare const patchClassSchema: z.ZodObject<{
     name: z.ZodOptional<z.ZodString>;
-    description: z.ZodNullable<z.ZodOptional<z.ZodString>>;
-    dayOfWeek: z.ZodOptional<z.ZodNumber>;
-    startTime: z.ZodOptional<z.ZodEffects<z.ZodString, string, string>>;
-    endTime: z.ZodNullable<z.ZodOptional<z.ZodEffects<z.ZodString, string, string>>>;
-    ownerWorkerId: z.ZodOptional<z.ZodString>;
-    status: z.ZodOptional<z.ZodEnum<["active", "inactive"]>>;
+    day: z.ZodOptional<z.ZodNumber>;
+    time: z.ZodOptional<z.ZodEffects<z.ZodString, string, string>>;
+    responsibleUserId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     name?: string | undefined;
-    status?: "active" | "inactive" | undefined;
-    description?: string | null | undefined;
-    dayOfWeek?: number | undefined;
-    startTime?: string | undefined;
-    endTime?: string | null | undefined;
-    ownerWorkerId?: string | undefined;
+    day?: number | undefined;
+    time?: string | undefined;
+    responsibleUserId?: string | undefined;
 }, {
     name?: string | undefined;
-    status?: "active" | "inactive" | undefined;
-    description?: string | null | undefined;
-    dayOfWeek?: number | undefined;
-    startTime?: string | undefined;
-    endTime?: string | null | undefined;
-    ownerWorkerId?: string | undefined;
+    day?: number | undefined;
+    time?: string | undefined;
+    responsibleUserId?: string | undefined;
 }>;
 export type PatchClassInput = z.infer<typeof patchClassSchema>;
-export declare const addMemberSchema: z.ZodObject<{
-    personId: z.ZodString;
-    active: z.ZodDefault<z.ZodOptional<z.ZodBoolean>>;
+export declare const addParticipantSchema: z.ZodObject<{
+    participantId: z.ZodString;
 }, "strip", z.ZodTypeAny, {
-    personId: string;
-    active: boolean;
+    participantId: string;
 }, {
-    personId: string;
-    active?: boolean | undefined;
+    participantId: string;
 }>;
-export type AddMemberInput = z.infer<typeof addMemberSchema>;
+export type AddParticipantInput = z.infer<typeof addParticipantSchema>;
 export declare const openSessionSchema: z.ZodObject<{
     date: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {

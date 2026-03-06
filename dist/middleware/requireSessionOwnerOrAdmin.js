@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireSessionOwnerOrAdmin = requireSessionOwnerOrAdmin;
 const prisma_1 = require("../lib/prisma");
 /**
- * Middleware que exige admin/super_admin OU ser o owner da turma da sessão.
+ * Middleware que exige evangelizador/super_admin OU ser o responsável da turma da sessão.
  * Deve ser usado após authJwt. Usa req.user. O :sessionId deve ser o sessionId.
  */
 async function requireSessionOwnerOrAdmin(req, res, next) {
@@ -13,19 +13,19 @@ async function requireSessionOwnerOrAdmin(req, res, next) {
         return;
     }
     const sessionId = req.params.sessionId;
-    if (user.role === "admin" || user.role === "super_admin") {
+    if (user.role === "evangelizador" || user.role === "super_admin") {
         next();
         return;
     }
     const session = await prisma_1.prisma.classSession.findUnique({
         where: { id: sessionId },
-        include: { class_: { select: { ownerWorkerId: true } } },
+        include: { class_: { select: { responsibleUserId: true } } },
     });
     if (!session) {
         res.status(404).json({ error: "Sessão não encontrada" });
         return;
     }
-    if (session.class_.ownerWorkerId !== user.personId) {
+    if (session.class_.responsibleUserId !== user.personId) {
         res.status(403).json({ error: "Sem permissão para esta sessão" });
         return;
     }

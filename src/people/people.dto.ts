@@ -2,7 +2,7 @@ import { z } from "zod";
 
 const personTypeEnum = z.enum(["worker", "participant"]);
 const personStatusEnum = z.enum(["active", "inactive"]);
-const workerRoleEnum = z.enum(["super_admin", "admin", "worker"]);
+const workerRoleEnum = z.enum(["super_admin", "evangelizador", "worker"]);
 
 const emailSchema = z.string().email("Email inválido").optional().nullable();
 const phoneSchema = z.string().optional().nullable();
@@ -14,6 +14,7 @@ export const createPeopleSchema = z
     phone: phoneSchema,
     email: emailSchema,
     type: personTypeEnum,
+    status: personStatusEnum.optional(),
     function: z.string().min(1).optional(),
     role: workerRoleEnum.optional(),
   })

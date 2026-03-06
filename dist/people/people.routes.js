@@ -41,8 +41,9 @@ const requireRole_1 = require("../middleware/requireRole");
 const peopleController = __importStar(require("./people.controller"));
 const router = (0, express_1.Router)();
 router.use(authJwt_1.authJwt);
-router.post("/", (0, requireRole_1.requireRole)("admin", "super_admin"), (0, asyncHandler_1.asyncHandler)(peopleController.createPeople));
-router.get("/", (0, requireRole_1.requireRole)("admin", "super_admin"), (0, asyncHandler_1.asyncHandler)(peopleController.listPeople));
-router.patch("/:id", (0, requireRole_1.requireRole)("admin", "super_admin"), (0, asyncHandler_1.asyncHandler)(peopleController.patchPeople));
+router.post("/", (0, requireRole_1.requireRole)("evangelizador", "super_admin", "worker"), (0, asyncHandler_1.asyncHandler)(peopleController.createPeople));
+router.get("/", (0, requireRole_1.requireRole)("evangelizador", "super_admin", "worker"), (0, asyncHandler_1.asyncHandler)(peopleController.listPeople));
+router.get("/:id", (0, requireRole_1.requireRole)("evangelizador", "super_admin", "worker"), (0, asyncHandler_1.asyncHandler)(peopleController.getPeopleById));
+router.patch("/:id", (0, requireRole_1.requireRole)("evangelizador", "super_admin"), (0, asyncHandler_1.asyncHandler)(peopleController.patchPeople));
 exports.peopleRoutes = router;
 //# sourceMappingURL=people.routes.js.map

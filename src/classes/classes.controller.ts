@@ -1,37 +1,17 @@
 import type { Request, Response } from "express";
-import { prisma } from "../lib/prisma";
 import {
   createClassSchema,
   patchClassSchema,
-  addMemberSchema,
+  addParticipantSchema,
   openSessionSchema,
   listSessionsQuerySchema,
 } from "./classes.dto";
-import {
-  getLocalDateStringAmericaBahia,
-  normalizeDateOnly,
-} from "../utils/dateUtils";
-import type { ClassStatus } from "@prisma/client";
+import { getLocalDateStringAmericaBahia } from "../utils/dateUtils";
+import * as classesService from "./classes.service";
 
 export async function listResponsibles(req: Request, res: Response) {
-  const responsibles = await prisma.people.findMany({
-    where: {
-      type: "worker",
-      worker: {
-        role: { in: ["admin", "super_admin"] },
-      },
-    },
-    include: { worker: true },
-    orderBy: { fullName: "asc" },
-  });
-
-  res.json(
-    responsibles.map((p) => ({
-      id: p.id,
-      fullName: p.fullName,
-      role: p.worker?.role,
-    }))
-  );
+  const responsibles = await classesService.listResponsibles();
+  res.json(responsibles);
 }
 
 export async function createClass(req: Request, res: Response) {
@@ -40,194 +20,107 @@ export async function createClass(req: Request, res: Response) {
     res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
     return;
   }
-  const data = parsed.data;
 
-  const owner = await prisma.people.findUnique({
-    where: { id: data.ownerWorkerId },
-    include: { worker: true },
-  });
-  if (!owner?.worker) {
-    res.status(400).json({ error: "ownerWorkerId deve ser uma pessoa do tipo worker" });
-    return;
+  try {
+    const class_ = await classesService.createClass(
+      parsed.data,
+      req.userId ?? null
+    );
+    res.status(201).json(class_);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao criar turma";
+    res.status(400).json({ error: msg });
   }
-
-  const createdBy = req.userId ?? null;
-
-  const class_ = await prisma.class.create({
-    data: {
-      name: data.name,
-      description: data.description ?? null,
-      dayOfWeek: data.dayOfWeek,
-      startTime: data.startTime,
-      endTime: data.endTime ?? null,
-      ownerWorkerId: data.ownerWorkerId,
-      quantidade: data.quantidade,
-      createdBy,
-    },
-    include: { owner: { include: { worker: true } } },
-  });
-
-  res.status(201).json(class_);
 }
 
 export async function listClasses(req: Request, res: Response) {
   const role = req.userRole!;
-  const userId = req.userId!;
+  const personId = req.userId!;
 
-  const where =
-    role === "worker"
-      ? { ownerWorkerId: userId }
-      : {};
-
-  const classes = await prisma.class.findMany({
-    where,
-    include: { owner: { include: { worker: true } } },
-    orderBy: { name: "asc" },
-  });
-
+  const classes = await classesService.listClasses(role, personId);
   res.json(classes);
 }
 
+export async function getClassById(req: Request, res: Response) {
+  const { id: classId } = req.params;
+  const role = req.userRole!;
+  const personId = req.userId!;
+
+  const class_ = await classesService.getClassById(classId, role, personId);
+  if (!class_) {
+    res.status(404).json({ error: "Turma não encontrada" });
+    return;
+  }
+  res.json(class_);
+}
+
 export async function patchClass(req: Request, res: Response) {
-  const { id } = req.params;
+  const { id: classId } = req.params;
   const parsed = patchClassSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
     return;
   }
-  const data = parsed.data;
-  const role = req.userRole!;
 
-  const existing = await prisma.class.findUnique({ where: { id } });
-  if (!existing) {
-    res.status(404).json({ error: "Turma não encontrada" });
-    return;
-  }
-
-  if (data.ownerWorkerId != null && role !== "admin" && role !== "super_admin") {
-    res.status(403).json({ error: "Somente admin pode trocar o owner da turma" });
-    return;
-  }
-
-  if (data.ownerWorkerId != null) {
-    const owner = await prisma.people.findUnique({
-      where: { id: data.ownerWorkerId },
-      include: { worker: true },
-    });
-    if (!owner?.worker) {
-      res.status(400).json({
-        error: "ownerWorkerId deve ser uma pessoa do tipo worker",
-      });
+  try {
+    const class_ = await classesService.patchClass(
+      classId,
+      parsed.data,
+      req.userRole!,
+      req.userId!
+    );
+    if (!class_) {
+      res.status(404).json({ error: "Turma não encontrada" });
       return;
     }
+    res.json(class_);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao atualizar turma";
+    res.status(err instanceof Error && msg.includes("permissão") ? 403 : 400).json({
+      error: msg,
+    });
   }
-
-  const class_ = await prisma.class.update({
-    where: { id },
-    data: {
-      ...(data.name != null && { name: data.name }),
-      ...(data.description !== undefined && { description: data.description }),
-      ...(data.dayOfWeek != null && { dayOfWeek: data.dayOfWeek }),
-      ...(data.startTime != null && { startTime: data.startTime }),
-      ...(data.endTime !== undefined && { endTime: data.endTime }),
-      ...(data.ownerWorkerId != null && { ownerWorkerId: data.ownerWorkerId }),
-      ...(data.quantidade != null && { quantidade: data.quantidade }),
-      ...(data.status != null && { status: data.status as ClassStatus }),
-    },
-    include: { owner: { include: { worker: true } } },
-  });
-
-  res.json(class_);
 }
 
-export async function addMember(req: Request, res: Response) {
+export async function addParticipant(req: Request, res: Response) {
   const { id: classId } = req.params;
-  const parsed = addMemberSchema.safeParse(req.body);
+  const parsed = addParticipantSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
     return;
   }
-  const { personId, active } = parsed.data;
 
-  const class_ = await prisma.class.findUnique({ where: { id: classId } });
-  if (!class_) {
-    res.status(404).json({ error: "Turma não encontrada" });
-    return;
+  try {
+    const cp = await classesService.addParticipant(classId, parsed.data);
+    res.status(201).json(cp);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao vincular participante";
+    const status = msg.includes("não encontrad") ? 404 : 400;
+    res.status(status).json({ error: msg });
   }
-
-  const person = await prisma.people.findUnique({ where: { id: personId } });
-  if (!person) {
-    res.status(404).json({ error: "Pessoa não encontrada" });
-    return;
-  }
-
-  const existing = await prisma.classMembership.findUnique({
-    where: { classId_personId: { classId, personId } },
-  });
-
-  if (existing) {
-    const updated = await prisma.classMembership.update({
-      where: { classId_personId: { classId, personId } },
-      data: { active },
-      include: { person: true },
-    });
-    res.json(updated);
-    return;
-  }
-
-  const membership = await prisma.classMembership.create({
-    data: { classId, personId, active },
-    include: { person: true },
-  });
-
-  res.status(201).json(membership);
 }
 
-export async function listMembers(req: Request, res: Response) {
+export async function removeParticipant(req: Request, res: Response) {
+  const { id: classId, participantId } = req.params;
+
+  try {
+    await classesService.removeParticipant(classId, participantId);
+    res.status(204).send();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao remover participante";
+    res.status(404).json({ error: msg });
+  }
+}
+
+export async function listParticipants(req: Request, res: Response) {
   const { id: classId } = req.params;
 
-  const class_ = await prisma.class.findUnique({ where: { id: classId } });
-  if (!class_) {
+  try {
+    const participants = await classesService.listParticipants(classId);
+    res.json(participants);
+  } catch {
     res.status(404).json({ error: "Turma não encontrada" });
-    return;
   }
-
-  const memberships = await prisma.classMembership.findMany({
-    where: {
-      classId,
-      person: { type: "participant" },
-    },
-    include: { person: true },
-    orderBy: { person: { fullName: "asc" } },
-  });
-
-  const members = memberships.map((m) => ({
-    ...m.person,
-    active: m.active,
-    sinceDate: m.sinceDate,
-  }));
-
-  res.json(members);
-}
-
-export async function removeMember(req: Request, res: Response) {
-  const { id: classId, personId } = req.params;
-
-  const membership = await prisma.classMembership.findUnique({
-    where: { classId_personId: { classId, personId } },
-  });
-
-  if (!membership) {
-    res.status(404).json({ error: "Participante não encontrado na turma" });
-    return;
-  }
-
-  await prisma.classMembership.update({
-    where: { classId_personId: { classId, personId } },
-    data: { active: false },
-  });
-
-  res.status(204).send();
 }
 
 export async function openSession(req: Request, res: Response) {
@@ -239,48 +132,18 @@ export async function openSession(req: Request, res: Response) {
   }
 
   const dateString = parsed.data.date ?? getLocalDateStringAmericaBahia();
-  const sessionDate = normalizeDateOnly(dateString);
-  const createdBy = req.userId!;
 
-  const class_ = await prisma.class.findUnique({ where: { id: classId } });
-  if (!class_) {
-    res.status(404).json({ error: "Turma não encontrada" });
-    return;
+  try {
+    const session = await classesService.openSession(
+      classId,
+      dateString,
+      req.userId!
+    );
+    res.status(201).json(session);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao abrir sessão";
+    res.status(404).json({ error: msg });
   }
-
-  const session = await prisma.classSession.upsert({
-    where: {
-      classId_sessionDate: { classId, sessionDate },
-    },
-    create: {
-      classId,
-      sessionDate,
-      createdBy,
-    },
-    update: {},
-    include: { class_: true },
-  });
-
-  const activeMembers = await prisma.classMembership.findMany({
-    where: {
-      classId,
-      active: true,
-      person: { type: "participant" },
-    },
-    include: { person: true },
-    orderBy: { person: { fullName: "asc" } },
-  });
-
-  const members = activeMembers.map((m) => ({
-    ...m.person,
-    active: m.active,
-    sinceDate: m.sinceDate,
-  }));
-
-  res.status(201).json({
-    ...session,
-    members,
-  });
 }
 
 export async function listSessions(req: Request, res: Response) {
@@ -290,44 +153,12 @@ export async function listSessions(req: Request, res: Response) {
     res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
     return;
   }
-  const { month } = parsed.data;
 
-  const [year, monthNum] = month.split("-").map(Number);
-  const startDate = new Date(Date.UTC(year, monthNum - 1, 1));
-  const endDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
-
-  const class_ = await prisma.class.findUnique({ where: { id: classId } });
-  if (!class_) {
-    res.status(404).json({ error: "Turma não encontrada" });
-    return;
+  try {
+    const sessions = await classesService.listSessions(classId, parsed.data.month);
+    res.json(sessions);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao listar sessões";
+    res.status(404).json({ error: msg });
   }
-
-  const sessions = await prisma.classSession.findMany({
-    where: {
-      classId,
-      sessionDate: {
-        gte: startDate,
-        lte: endDate,
-      },
-    },
-    include: { class_: true },
-    orderBy: { sessionDate: "asc" },
-  });
-
-  const sessionsWithCalculated = sessions.map((s) => {
-    const d = s.sessionDate;
-    const day = d.getUTCDate();
-    const monthVal = d.getUTCMonth() + 1;
-    const yearVal = d.getUTCFullYear();
-    const weekOfMonth = Math.floor((day - 1) / 7) + 1;
-
-    return {
-      ...s,
-      month: monthVal,
-      year: yearVal,
-      weekOfMonth,
-    };
-  });
-
-  res.json(sessionsWithCalculated);
 }

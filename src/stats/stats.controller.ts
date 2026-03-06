@@ -13,7 +13,7 @@ export async function getOverview(req: Request, res: Response) {
     sessoesNoMesAtual,
     attendances,
   ] = await Promise.all([
-    prisma.class.count({ where: { status: "active" } }),
+    prisma.class.count(),
     prisma.people.count({
       where: { type: "participant", status: "active" },
     }),
@@ -56,12 +56,8 @@ export async function getClassesStats(req: Request, res: Response) {
   const { start, end } = getCurrentMonthRangeBahia();
 
   const classes = await prisma.class.findMany({
-    where: { status: "active" },
     include: {
-      memberships: {
-        where: { active: true, person: { type: "participant" } },
-        select: { personId: true },
-      },
+      participants: { select: { participantId: true } },
       sessions: {
         where: { sessionDate: { gte: start, lte: end } },
         include: {
@@ -72,7 +68,7 @@ export async function getClassesStats(req: Request, res: Response) {
   });
 
   const classesStats: ClassStatsItem[] = classes.map((c) => {
-    const participantesAtivos = c.memberships.length;
+    const participantesAtivos = c.participants.length;
     let present = 0;
     let absent = 0;
     let justified = 0;

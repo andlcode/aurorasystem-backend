@@ -19,13 +19,8 @@ enum PersonStatus {
 
 enum WorkerRole {
   super_admin
-  admin
+  evangelizador
   worker
-}
-
-enum ClassStatus {
-  active
-  inactive
 }
 
 enum AttendanceStatus {
@@ -45,11 +40,10 @@ model People {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
-  worker            Worker?
-  ownedClasses      Class[]           @relation("ClassOwner")
-  createdClasses    Class[]           @relation("ClassCreator")
-  classMemberships  ClassMembership[]
-  createdSessions   ClassSession[]
+  worker              Worker?
+  responsibleClasses  Class[]             @relation("ClassResponsible")
+  classParticipants   ClassParticipant[]
+  createdSessions     ClassSession[]
   attendances       Attendance[]      @relation("ParticipantAttendance")
   recordedAttendances Attendance[]    @relation("AttendanceRecorder")
 
@@ -104,41 +98,33 @@ model Worker {
 }
 
 model Class {
-  id             String      @id @default(uuid())
-  name           String
-  description    String?
-  dayOfWeek      Int
-  startTime      String
-  endTime        String?
-  ownerWorkerId  String
-  quantidade     Int         @default(0)
-  status         ClassStatus @default(active)
-  createdBy      String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                String   @id @default(uuid())
+  name              String
+  day               Int
+  time              String
+  responsibleUserId String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  owner       People            @relation("ClassOwner", fields: [ownerWorkerId], references: [id])
-  creator     People?           @relation("ClassCreator", fields: [createdBy], references: [id])
-  memberships  ClassMembership[]
+  responsible  People             @relation("ClassResponsible", fields: [responsibleUserId], references: [id])
+  participants ClassParticipant[]
   sessions     ClassSession[]
 
-  @@index([ownerWorkerId])
+  @@index([responsibleUserId])
 }
 
-model ClassMembership {
-  classId    String
-  personId  String
-  active    Boolean   @default(true)
-  sinceDate DateTime? @db.Date
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+model ClassParticipant {
+  id            String   @id @default(uuid())
+  classId      String
+  participantId String
+  createdAt    DateTime @default(now())
 
-  class_ Class @relation(fields: [classId], references: [id], onDelete: Cascade)
-  person People @relation(fields: [personId], references: [id], onDelete: Cascade)
+  class_      Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  participant People @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
-  @@id([classId, personId])
+  @@unique([classId, participantId])
   @@index([classId])
-  @@index([personId])
+  @@index([participantId])
 }
 
 model ClassSession {

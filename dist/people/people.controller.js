@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createPeople = createPeople;
 exports.listPeople = listPeople;
+exports.getPeopleById = getPeopleById;
 exports.patchPeople = patchPeople;
 const prisma_1 = require("../lib/prisma");
 const people_dto_1 = require("./people.dto");
@@ -22,6 +23,7 @@ async function createPeople(req, res) {
             phone: data.phone ?? null,
             email: data.email ?? null,
             type: data.type,
+            status: (data.status ?? "active"),
             ...(data.type === "worker" && {
                 worker: {
                     create: {
@@ -61,6 +63,18 @@ async function listPeople(req, res) {
     });
     res.json(people);
 }
+async function getPeopleById(req, res) {
+    const { id } = req.params;
+    const person = await prisma_1.prisma.people.findUnique({
+        where: { id },
+        include: { worker: true },
+    });
+    if (!person) {
+        res.status(404).json({ error: "Pessoa não encontrada" });
+        return;
+    }
+    res.json(person);
+}
 async function patchPeople(req, res) {
     const { id } = req.params;
     const parsed = people_dto_1.patchPeopleSchema.safeParse(req.body);
@@ -78,14 +92,18 @@ async function patchPeople(req, res) {
         res.status(404).json({ error: "Pessoa não encontrada" });
         return;
     }
+    if (existing.type === "participant" && userRole !== "super_admin") {
+        res.status(403).json({ error: "Somente super_admin pode editar participantes" });
+        return;
+    }
     if (!existing.worker && (data.function != null || data.role != null)) {
         res.status(400).json({
             error: "function e role só podem ser editados para pessoas do tipo worker",
         });
         return;
     }
-    if (data.role === "admin" && userRole !== "super_admin") {
-        res.status(403).json({ error: "Somente super_admin pode promover para admin" });
+    if (data.role === "evangelizador" && userRole !== "super_admin") {
+        res.status(403).json({ error: "Somente super_admin pode promover para evangelizador" });
         return;
     }
     const birthDate = data.birthDate !== undefined
