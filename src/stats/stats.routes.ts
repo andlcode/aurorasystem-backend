@@ -10,6 +10,12 @@ const router = Router();
 router.use(authJwt);
 
 router.get(
+  "/dashboard",
+  requireAuth,
+  asyncHandler(statsController.getDashboard)
+);
+
+router.get(
   "/overview",
   requireRole("evangelizador", "super_admin"),
   asyncHandler(statsController.getOverview)

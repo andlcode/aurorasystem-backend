@@ -1,10 +1,45 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getOverview = getOverview;
+exports.getDashboard = getDashboard;
 exports.getClassesStats = getClassesStats;
 exports.getClassDetailStats = getClassDetailStats;
 const prisma_1 = require("../lib/prisma");
 const dateUtils_1 = require("../utils/dateUtils");
+const DASHBOARD_MONTHS = 6;
+function roundPercentage(value) {
+    return Math.round(value * 10) / 10;
+}
+function toDateOnly(value) {
+    if (typeof value === "string") {
+        return value.slice(0, 10);
+    }
+    return value.toISOString().slice(0, 10);
+}
+function getLastMonthsSeries(totalMonths) {
+    const formatter = new Intl.DateTimeFormat("pt-BR", {
+        month: "short",
+        year: "2-digit",
+        timeZone: "UTC",
+    });
+    const now = new Date();
+    const currentMonthUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+    const series = [];
+    for (let index = totalMonths - 1; index >= 0; index--) {
+        const date = new Date(currentMonthUtc);
+        date.setUTCMonth(date.getUTCMonth() - index);
+        const year = date.getUTCFullYear();
+        const month = date.getUTCMonth() + 1;
+        const key = `${year}-${String(month).padStart(2, "0")}`;
+        const label = formatter.format(date).replace(".", "");
+        series.push({
+            month: key,
+            label: label.charAt(0).toUpperCase() + label.slice(1),
+            averageAttendance: 0,
+        });
+    }
+    return series;
+}
 async function getOverview(req, res) {
     const { start, end } = (0, dateUtils_1.getCurrentMonthRangeBahia)();
     const [totalTurmasAtivas, totalParticipantesAtivos, totalTrabalhadoresAtivos, sessoesNoMesAtual, attendances,] = await Promise.all([
@@ -40,6 +75,202 @@ async function getOverview(req, res) {
         totalTrabalhadoresAtivos,
         sessoesNoMesAtual,
         presencasNoMesAtual,
+    };
+    res.json(body);
+}
+async function getDashboard(req, res) {
+    const role = req.user?.role ?? req.userRole;
+    const personId = req.user?.personId ?? req.userId;
+    const canViewAll = role === "super_admin" || role === "evangelizador";
+    const classWhere = canViewAll ? {} : { responsibleUserId: personId };
+    const monthSeries = getLastMonthsSeries(DASHBOARD_MONTHS);
+    const monthLookup = new Map(monthSeries.map((item) => [
+        item.month,
+        { present: 0, total: 0, label: item.label },
+    ]));
+    const { start, end } = (0, dateUtils_1.getCurrentMonthRangeBahia)();
+    const accessibleClasses = await prisma_1.prisma.class.findMany({
+        where: classWhere,
+        select: { id: true, name: true },
+        orderBy: { name: "asc" },
+    });
+    if (accessibleClasses.length === 0) {
+        const emptyBody = {
+            totals: {
+                totalClasses: 0,
+                activeParticipants: 0,
+                sessionsThisMonth: 0,
+                averageAttendance: 0,
+            },
+            attendanceByClass: [],
+            attendanceByMonth: monthSeries,
+            topAbsences: [],
+            recentSessions: [],
+        };
+        res.json(emptyBody);
+        return;
+    }
+    const classIds = accessibleClasses.map((item) => item.id);
+    const [activeParticipants, sessionsThisMonth, attendances, recentSessions] = await Promise.all([
+        prisma_1.prisma.classParticipant.findMany({
+            where: {
+                classId: { in: classIds },
+                participant: {
+                    type: "participant",
+                    status: "active",
+                },
+            },
+            distinct: ["participantId"],
+            select: { participantId: true },
+        }),
+        prisma_1.prisma.classSession.count({
+            where: {
+                classId: { in: classIds },
+                sessionDate: { gte: start, lte: end },
+            },
+        }),
+        prisma_1.prisma.attendance.findMany({
+            where: {
+                session: { classId: { in: classIds } },
+                participant: { type: "participant" },
+            },
+            select: {
+                status: true,
+                participantId: true,
+                participant: {
+                    select: {
+                        fullName: true,
+                    },
+                },
+                session: {
+                    select: {
+                        sessionDate: true,
+                        classId: true,
+                        class_: {
+                            select: {
+                                name: true,
+                            },
+                        },
+                    },
+                },
+            },
+        }),
+        prisma_1.prisma.classSession.findMany({
+            where: {
+                classId: { in: classIds },
+            },
+            take: 8,
+            orderBy: [{ sessionDate: "desc" }, { createdAt: "desc" }],
+            select: {
+                id: true,
+                classId: true,
+                sessionDate: true,
+                class_: {
+                    select: {
+                        name: true,
+                    },
+                },
+                attendances: {
+                    select: {
+                        status: true,
+                    },
+                },
+            },
+        }),
+    ]);
+    const classAttendanceMap = new Map(accessibleClasses.map((item) => [
+        item.id,
+        { className: item.name, present: 0, total: 0 },
+    ]));
+    const absenceMap = new Map();
+    let totalAttendances = 0;
+    let totalPresent = 0;
+    for (const attendance of attendances) {
+        totalAttendances++;
+        if (attendance.status === "present") {
+            totalPresent++;
+        }
+        const classStats = classAttendanceMap.get(attendance.session.classId);
+        if (classStats) {
+            classStats.total++;
+            if (attendance.status === "present") {
+                classStats.present++;
+            }
+        }
+        const monthKey = toDateOnly(attendance.session.sessionDate).slice(0, 7);
+        const monthStats = monthLookup.get(monthKey);
+        if (monthStats) {
+            monthStats.total++;
+            if (attendance.status === "present") {
+                monthStats.present++;
+            }
+        }
+        const absenceKey = `${attendance.session.classId}:${attendance.participantId}`;
+        const currentAbsence = absenceMap.get(absenceKey) ?? {
+            participantId: attendance.participantId,
+            participantName: attendance.participant.fullName,
+            classId: attendance.session.classId,
+            className: attendance.session.class_.name,
+            absences: 0,
+            lastPresence: null,
+        };
+        if (attendance.status === "absent") {
+            currentAbsence.absences++;
+        }
+        if (attendance.status === "present") {
+            const date = toDateOnly(attendance.session.sessionDate);
+            if (!currentAbsence.lastPresence || date > currentAbsence.lastPresence) {
+                currentAbsence.lastPresence = date;
+            }
+        }
+        absenceMap.set(absenceKey, currentAbsence);
+    }
+    const body = {
+        totals: {
+            totalClasses: accessibleClasses.length,
+            activeParticipants: activeParticipants.length,
+            sessionsThisMonth,
+            averageAttendance: totalAttendances > 0
+                ? roundPercentage((totalPresent / totalAttendances) * 100)
+                : 0,
+        },
+        attendanceByClass: accessibleClasses.map((item) => {
+            const stats = classAttendanceMap.get(item.id);
+            const averageAttendance = stats && stats.total > 0
+                ? roundPercentage((stats.present / stats.total) * 100)
+                : 0;
+            return {
+                classId: item.id,
+                className: item.name,
+                averageAttendance,
+            };
+        }),
+        attendanceByMonth: monthSeries.map((item) => {
+            const stats = monthLookup.get(item.month);
+            return {
+                ...item,
+                averageAttendance: stats && stats.total > 0
+                    ? roundPercentage((stats.present / stats.total) * 100)
+                    : 0,
+            };
+        }),
+        topAbsences: Array.from(absenceMap.values())
+            .filter((item) => item.absences > 0)
+            .sort((left, right) => {
+            if (right.absences !== left.absences) {
+                return right.absences - left.absences;
+            }
+            return left.participantName.localeCompare(right.participantName, "pt-BR");
+        })
+            .slice(0, 10),
+        recentSessions: recentSessions.map((session) => ({
+            sessionId: session.id,
+            classId: session.classId,
+            className: session.class_.name,
+            date: toDateOnly(session.sessionDate),
+            presentCount: session.attendances.filter((item) => item.status === "present").length,
+            absentCount: session.attendances.filter((item) => item.status === "absent").length,
+        })),
     };
     res.json(body);
 }
