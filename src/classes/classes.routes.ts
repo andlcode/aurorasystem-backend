@@ -9,6 +9,12 @@ import * as classesController from "./classes.controller";
 const router = Router();
 router.use(authJwt);
 
+router.get(
+  "/responsibles",
+  requireRole("admin", "super_admin"),
+  asyncHandler(classesController.listResponsibles)
+);
+
 router.post(
   "/",
   requireRole("admin", "super_admin"),

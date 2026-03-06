@@ -13,6 +13,27 @@ import {
 } from "../utils/dateUtils";
 import type { ClassStatus } from "@prisma/client";
 
+export async function listResponsibles(req: Request, res: Response) {
+  const responsibles = await prisma.people.findMany({
+    where: {
+      type: "worker",
+      worker: {
+        role: { in: ["admin", "super_admin"] },
+      },
+    },
+    include: { worker: true },
+    orderBy: { fullName: "asc" },
+  });
+
+  res.json(
+    responsibles.map((p) => ({
+      id: p.id,
+      fullName: p.fullName,
+      role: p.worker?.role,
+    }))
+  );
+}
+
 export async function createClass(req: Request, res: Response) {
   const parsed = createClassSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -40,6 +61,7 @@ export async function createClass(req: Request, res: Response) {
       startTime: data.startTime,
       endTime: data.endTime ?? null,
       ownerWorkerId: data.ownerWorkerId,
+      quantidade: data.quantidade,
       createdBy,
     },
     include: { owner: { include: { worker: true } } },
@@ -109,6 +131,7 @@ export async function patchClass(req: Request, res: Response) {
       ...(data.startTime != null && { startTime: data.startTime }),
       ...(data.endTime !== undefined && { endTime: data.endTime }),
       ...(data.ownerWorkerId != null && { ownerWorkerId: data.ownerWorkerId }),
+      ...(data.quantidade != null && { quantidade: data.quantidade }),
       ...(data.status != null && { status: data.status as ClassStatus }),
     },
     include: { owner: { include: { worker: true } } },

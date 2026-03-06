@@ -11,6 +11,7 @@ export const createClassSchema = z.object({
   startTime: timeSchema,
   endTime: timeSchema.optional().nullable(),
   ownerWorkerId: z.string().uuid("ownerWorkerId deve ser um UUID válido"),
+  quantidade: z.number().int().min(1, "Quantidade deve ser maior que 0"),
 });
 
 export type CreateClassInput = z.infer<typeof createClassSchema>;
@@ -22,6 +23,7 @@ export const patchClassSchema = z.object({
   startTime: timeSchema.optional(),
   endTime: timeSchema.optional().nullable(),
   ownerWorkerId: z.string().uuid().optional(),
+  quantidade: z.number().int().min(0).optional(),
   status: classStatusEnum.optional(),
 });
 
