@@ -13,7 +13,7 @@ export async function listResponsibles() {
     where: {
       type: "worker",
       worker: {
-        role: { in: ["worker", "evangelizador", "super_admin"] as WorkerRole[] },
+        role: { in: ["evangelizador", "super_admin"] as WorkerRole[] },
       },
     },
     include: { worker: true },
@@ -34,11 +34,11 @@ export async function createClass(data: CreateClassInput, createdByPersonId: str
   });
 
   if (!responsible?.worker) {
-    throw new Error("responsibleUserId deve ser uma pessoa do tipo worker com role moderador, evangelizador ou super_admin");
+    throw new Error("O responsável deve ser um evangelizador ou super_admin.");
   }
 
-  if (!["worker", "evangelizador", "super_admin"].includes(responsible.worker.role)) {
-    throw new Error("O responsável deve ter role moderador, evangelizador ou super_admin");
+  if (!["evangelizador", "super_admin"].includes(responsible.worker.role)) {
+    throw new Error("O responsável deve ser um evangelizador ou super_admin.");
   }
 
   return prisma.class.create({
@@ -95,8 +95,8 @@ export async function patchClass(
       where: { id: data.responsibleUserId },
       include: { worker: true },
     });
-    if (!responsible?.worker || !["worker", "evangelizador", "super_admin"].includes(responsible.worker.role)) {
-      throw new Error("responsibleUserId deve ser uma pessoa com role moderador, evangelizador ou super_admin");
+    if (!responsible?.worker || !["evangelizador", "super_admin"].includes(responsible.worker.role)) {
+      throw new Error("O responsável deve ser um evangelizador ou super_admin.");
     }
   }
 
@@ -173,6 +173,9 @@ export async function removeParticipant(classId: string, participantId: string) 
 }
 
 export async function listParticipants(classId: string) {
+  const class_ = await prisma.class.findUnique({ where: { id: classId } });
+  if (!class_) throw new Error("Turma não encontrada");
+
   const participants = await prisma.classParticipant.findMany({
     where: { classId },
     include: { participant: true },

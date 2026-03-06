@@ -5,6 +5,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import { authRoutes } from "./auth/auth.routes";
 import { classesRoutes } from "./classes/classes.routes";
 import { peopleRoutes } from "./people/people.routes";
+import { teamRoutes } from "./team/team.routes";
 import { sessionsRoutes } from "./sessions/sessions.routes";
 import { statsRoutes } from "./stats/stats.routes";
 
@@ -25,6 +26,7 @@ app.get("/health", (_req, res) => {
 
 app.use("/auth", authRoutes);
 app.use("/people", peopleRoutes);
+app.use("/team", teamRoutes);
 app.use("/classes", classesRoutes);
 app.use("/sessions", sessionsRoutes);
 app.use("/stats", statsRoutes);

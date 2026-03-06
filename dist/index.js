@@ -10,6 +10,7 @@ const errorHandler_1 = require("./middleware/errorHandler");
 const auth_routes_1 = require("./auth/auth.routes");
 const classes_routes_1 = require("./classes/classes.routes");
 const people_routes_1 = require("./people/people.routes");
+const team_routes_1 = require("./team/team.routes");
 const sessions_routes_1 = require("./sessions/sessions.routes");
 const stats_routes_1 = require("./stats/stats.routes");
 const app = (0, express_1.default)();
@@ -25,6 +26,7 @@ app.get("/health", (_req, res) => {
 });
 app.use("/auth", auth_routes_1.authRoutes);
 app.use("/people", people_routes_1.peopleRoutes);
+app.use("/team", team_routes_1.teamRoutes);
 app.use("/classes", classes_routes_1.classesRoutes);
 app.use("/sessions", sessions_routes_1.sessionsRoutes);
 app.use("/stats", stats_routes_1.statsRoutes);

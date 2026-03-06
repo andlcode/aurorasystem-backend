@@ -13,6 +13,7 @@ exports.listSessions = listSessions;
 exports.getSessionById = getSessionById;
 exports.putBulkAttendance = putBulkAttendance;
 const prisma_js_1 = require("../lib/prisma.js");
+const dateUtils_js_1 = require("../utils/dateUtils.js");
 const classInclude = {
     responsible: { include: { worker: true } },
     participants: { include: { participant: true } },
@@ -164,8 +165,7 @@ async function listParticipants(classId) {
     }));
 }
 async function openSession(classId, dateString, createdByPersonId) {
-    const { normalizeDateOnly } = await import("../utils/dateUtils.js");
-    const sessionDate = normalizeDateOnly(dateString);
+    const sessionDate = (0, dateUtils_js_1.normalizeDateOnly)(dateString);
     const class_ = await prisma_js_1.prisma.class.findUnique({ where: { id: classId } });
     if (!class_)
         throw new Error("Turma não encontrada");
