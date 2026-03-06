@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 
 /**
- * Middleware que exige evangelizador/super_admin OU ser o responsável da turma.
+ * Middleware que exige evangelizador/super_admin OU ser o responsável (moderador) da turma.
  * Deve ser usado após authJwt. Usa req.user. O :id deve ser o classId.
  */
 export async function requireClassOwnerOrAdmin(
