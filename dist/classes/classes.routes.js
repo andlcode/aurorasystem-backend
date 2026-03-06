@@ -52,6 +52,9 @@ router.delete("/:id/participants/:participantId", (0, requireRole_1.requireRole)
 router.get("/:id", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHandler)(classesController.getClassById));
 router.patch("/:id", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHandler)(requireClassOwnerOrAdmin_1.requireClassOwnerOrAdmin), (0, asyncHandler_1.asyncHandler)(classesController.patchClass));
 router.post("/:id/sessions/open", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHandler)(requireClassOwnerOrAdmin_1.requireClassOwnerOrAdmin), (0, asyncHandler_1.asyncHandler)(classesController.openSession));
+router.post("/:id/sessions", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHandler)(requireClassOwnerOrAdmin_1.requireClassOwnerOrAdmin), (0, asyncHandler_1.asyncHandler)(classesController.createOrGetSession));
 router.get("/:id/sessions", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHandler)(requireClassOwnerOrAdmin_1.requireClassOwnerOrAdmin), (0, asyncHandler_1.asyncHandler)(classesController.listSessions));
+router.get("/:id/sessions/:sessionId", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHandler)(requireClassOwnerOrAdmin_1.requireClassOwnerOrAdmin), (0, asyncHandler_1.asyncHandler)(classesController.getSessionById));
+router.put("/:id/sessions/:sessionId/attendance", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHandler)(requireClassOwnerOrAdmin_1.requireClassOwnerOrAdmin), (0, asyncHandler_1.asyncHandler)(classesController.putBulkAttendance));
 exports.classesRoutes = router;
 //# sourceMappingURL=classes.routes.js.map

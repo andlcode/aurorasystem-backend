@@ -1,5 +1,6 @@
-import { prisma } from "../lib/prisma";
-import type { CreateClassInput, PatchClassInput, AddParticipantInput } from "./classes.dto";
+import { prisma } from "../lib/prisma.js";
+import { normalizeDateOnly } from "../utils/dateUtils.js";
+import type { CreateClassInput, PatchClassInput, AddParticipantInput } from "./classes.dto.js";
 import type { WorkerRole } from "@prisma/client";
 
 const classInclude = {
@@ -185,7 +186,6 @@ export async function listParticipants(classId: string) {
 }
 
 export async function openSession(classId: string, dateString: string, createdByPersonId: string) {
-  const { normalizeDateOnly } = await import("../utils/dateUtils");
   const sessionDate = normalizeDateOnly(dateString);
 
   const class_ = await prisma.class.findUnique({ where: { id: classId } });
@@ -218,24 +218,28 @@ export async function openSession(classId: string, dateString: string, createdBy
   return { ...session, members };
 }
 
-export async function listSessions(classId: string, month: string) {
+export async function listSessions(classId: string, month?: string) {
   const class_ = await prisma.class.findUnique({ where: { id: classId } });
   if (!class_) throw new Error("Turma não encontrada");
 
-  const [year, monthNum] = month.split("-").map(Number);
-  const startDate = new Date(Date.UTC(year, monthNum - 1, 1));
-  const endDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
+  const where: { classId: string; sessionDate?: { gte: Date; lte: Date } } = {
+    classId,
+  };
+
+  if (month) {
+    const [year, monthNum] = month.split("-").map(Number);
+    const startDate = new Date(Date.UTC(year, monthNum - 1, 1));
+    const endDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
+    where.sessionDate = { gte: startDate, lte: endDate };
+  }
 
   const sessions = await prisma.classSession.findMany({
-    where: {
-      classId,
-      sessionDate: {
-        gte: startDate,
-        lte: endDate,
-      },
+    where,
+    include: {
+      class_: true,
+      attendances: true,
     },
-    include: { class_: true },
-    orderBy: { sessionDate: "asc" },
+    orderBy: { sessionDate: "desc" },
   });
 
   return sessions.map((s) => {
@@ -244,11 +248,141 @@ export async function listSessions(classId: string, month: string) {
     const monthVal = d.getUTCMonth() + 1;
     const yearVal = d.getUTCFullYear();
     const weekOfMonth = Math.floor((day - 1) / 7) + 1;
+    const present = s.attendances.filter((a) => a.status === "present").length;
+    const absent = s.attendances.filter((a) => a.status === "absent").length;
+    const justified = s.attendances.filter((a) => a.status === "justified").length;
     return {
       ...s,
       month: monthVal,
       year: yearVal,
       weekOfMonth,
+      present,
+      absent,
+      justified,
+      participantCount: s.attendances.length,
     };
   });
+}
+
+export async function getSessionById(classId: string, sessionId: string) {
+  const session = await prisma.classSession.findUnique({
+    where: { id: sessionId },
+    include: {
+      class_: { include: classInclude },
+      attendances: { include: { participant: true } },
+    },
+  });
+
+  if (!session || session.classId !== classId) return null;
+
+  const participants = await prisma.classParticipant.findMany({
+    where: { classId },
+    include: { participant: true },
+    orderBy: { participant: { fullName: "asc" } },
+  });
+
+  const members = participants.map((cp) => ({
+    ...cp.participant,
+    createdAt: cp.createdAt,
+  }));
+
+  const attendanceMap = new Map(
+    session.attendances.map((a) => [a.participantId, a])
+  );
+
+  return {
+    ...session,
+    members,
+    attendanceMap: Object.fromEntries(attendanceMap),
+    items: session.attendances.map((a) => ({
+      id: a.id,
+      participantId: a.participantId,
+      status: a.status,
+      justificationReason: a.justificationReason,
+      participant: a.participant,
+    })),
+    present: session.attendances.filter((a) => a.status === "present").length,
+    absent: session.attendances.filter((a) => a.status === "absent").length,
+    justified: session.attendances.filter((a) => a.status === "justified").length,
+  };
+}
+
+export async function putBulkAttendance(
+  classId: string,
+  sessionId: string,
+  records: Array<{ participantId: string; status: string; notes?: string | null }>,
+  recordedBy: string
+) {
+  const session = await prisma.classSession.findUnique({
+    where: { id: sessionId },
+    include: { class_: true },
+  });
+
+  if (!session || session.classId !== classId) {
+    throw new Error("Sessão não encontrada ou não pertence a esta turma");
+  }
+
+  const participantIds = await prisma.classParticipant.findMany({
+    where: { classId },
+    select: { participantId: true },
+  });
+  const allowedIds = new Set(participantIds.map((p) => p.participantId));
+
+  const statusMap: Record<string, "present" | "absent" | "justified"> = {
+    presente: "present",
+    ausente: "absent",
+    justificado: "justified",
+  };
+
+  for (const rec of records) {
+    if (!allowedIds.has(rec.participantId)) {
+      throw new Error(
+        `Participante ${rec.participantId} não está vinculado a esta turma`
+      );
+    }
+    const dbStatus = statusMap[rec.status];
+    if (!dbStatus) {
+      throw new Error(`Status inválido: ${rec.status}. Use presente, ausente ou justificado.`);
+    }
+
+    await prisma.attendance.upsert({
+      where: {
+        sessionId_participantId: { sessionId, participantId: rec.participantId },
+      },
+      create: {
+        sessionId,
+        participantId: rec.participantId,
+        status: dbStatus,
+        justificationReason:
+          dbStatus === "justified" ? (rec.notes ?? null) : null,
+        recordedBy,
+      },
+      update: {
+        status: dbStatus,
+        justificationReason:
+          dbStatus === "justified" ? (rec.notes ?? null) : null,
+        recordedBy,
+      },
+    });
+  }
+
+  const attendances = await prisma.attendance.findMany({
+    where: { sessionId },
+    include: { participant: true },
+    orderBy: { participant: { fullName: "asc" } },
+  });
+
+  return {
+    items: attendances.map((a) => ({
+      id: a.id,
+      participantId: a.participantId,
+      status: a.status,
+      justificationReason: a.justificationReason,
+      participant: a.participant,
+    })),
+    total: attendances.length,
+    present: attendances.filter((a) => a.status === "present").length,
+    absent: attendances.filter((a) => a.status === "absent").length,
+    justified: attendances.filter((a) => a.status === "justified").length,
+  };
 }

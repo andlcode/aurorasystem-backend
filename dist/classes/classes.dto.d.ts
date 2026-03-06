@@ -50,11 +50,47 @@ export declare const openSessionSchema: z.ZodObject<{
 }>;
 export type OpenSessionInput = z.infer<typeof openSessionSchema>;
 export declare const listSessionsQuerySchema: z.ZodObject<{
-    month: z.ZodString;
+    month: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    month: string;
+    month?: string | undefined;
 }, {
-    month: string;
+    month?: string | undefined;
 }>;
 export type ListSessionsQuery = z.infer<typeof listSessionsQuerySchema>;
+export declare const createOrGetSessionSchema: z.ZodObject<{
+    date: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    date: string;
+}, {
+    date: string;
+}>;
+export type CreateOrGetSessionInput = z.infer<typeof createOrGetSessionSchema>;
+export declare const putBulkAttendanceSchema: z.ZodObject<{
+    records: z.ZodArray<z.ZodObject<{
+        participantId: z.ZodString;
+        status: z.ZodEnum<["presente", "ausente", "justificado"]>;
+        notes: z.ZodNullable<z.ZodOptional<z.ZodString>>;
+    }, "strip", z.ZodTypeAny, {
+        status: "presente" | "ausente" | "justificado";
+        participantId: string;
+        notes?: string | null | undefined;
+    }, {
+        status: "presente" | "ausente" | "justificado";
+        participantId: string;
+        notes?: string | null | undefined;
+    }>, "many">;
+}, "strip", z.ZodTypeAny, {
+    records: {
+        status: "presente" | "ausente" | "justificado";
+        participantId: string;
+        notes?: string | null | undefined;
+    }[];
+}, {
+    records: {
+        status: "presente" | "ausente" | "justificado";
+        participantId: string;
+        notes?: string | null | undefined;
+    }[];
+}>;
+export type PutBulkAttendanceInput = z.infer<typeof putBulkAttendanceSchema>;
 //# sourceMappingURL=classes.dto.d.ts.map

@@ -133,6 +133,7 @@ model ClassSession {
   sessionDate DateTime @db.Date
   createdBy   String
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   class_     Class       @relation(fields: [classId], references: [id], onDelete: Cascade)
   creator    People      @relation(fields: [createdBy], references: [id])

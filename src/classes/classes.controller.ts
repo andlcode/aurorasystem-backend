@@ -5,6 +5,8 @@ import {
   addParticipantSchema,
   openSessionSchema,
   listSessionsQuerySchema,
+  createOrGetSessionSchema,
+  putBulkAttendanceSchema,
 } from "./classes.dto";
 import { getLocalDateStringAmericaBahia } from "../utils/dateUtils";
 import * as classesService from "./classes.service";
@@ -160,5 +162,71 @@ export async function listSessions(req: Request, res: Response) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Erro ao listar sessões";
     res.status(404).json({ error: msg });
+  }
+}
+
+export async function createOrGetSession(req: Request, res: Response) {
+  const { id: classId } = req.params;
+  const parsed = createOrGetSessionSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
+    return;
+  }
+
+  const dateString = parsed.data.date;
+
+  try {
+    const session = await classesService.openSession(
+      classId,
+      dateString,
+      req.userId!
+    );
+    res.status(201).json(session);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao abrir sessão";
+    res.status(404).json({ error: msg });
+  }
+}
+
+export async function getSessionById(req: Request, res: Response) {
+  const { id: classId, sessionId } = req.params;
+
+  try {
+    const session = await classesService.getSessionById(classId, sessionId);
+    if (!session) {
+      res.status(404).json({ error: "Sessão não encontrada" });
+      return;
+    }
+    res.json(session);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao buscar sessão";
+    res.status(404).json({ error: msg });
+  }
+}
+
+export async function putBulkAttendance(req: Request, res: Response) {
+  const { id: classId, sessionId } = req.params;
+  const parsed = putBulkAttendanceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
+    return;
+  }
+
+  try {
+    const result = await classesService.putBulkAttendance(
+      classId,
+      sessionId,
+      parsed.data.records.map((r) => ({
+        participantId: r.participantId,
+        status: r.status,
+        notes: r.notes,
+      })),
+      req.userId!
+    );
+    res.json(result);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao salvar presença";
+    const status = msg.includes("não encontrad") ? 404 : 400;
+    res.status(status).json({ error: msg });
   }
 }

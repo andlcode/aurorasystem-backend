@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.listSessionsQuerySchema = exports.openSessionSchema = exports.addParticipantSchema = exports.patchClassSchema = exports.createClassSchema = void 0;
+exports.putBulkAttendanceSchema = exports.createOrGetSessionSchema = exports.listSessionsQuerySchema = exports.openSessionSchema = exports.addParticipantSchema = exports.patchClassSchema = exports.createClassSchema = void 0;
 const zod_1 = require("zod");
 const timeValidation_1 = require("../utils/timeValidation");
 const timeSchema = zod_1.z.string().refine(timeValidation_1.isValidTimeFormat, "Use formato HH:mm");
@@ -23,6 +23,17 @@ exports.openSessionSchema = zod_1.z.object({
     date: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use formato YYYY-MM-DD").optional(),
 });
 exports.listSessionsQuerySchema = zod_1.z.object({
-    month: zod_1.z.string().regex(/^\d{4}-\d{2}$/, "Use formato YYYY-MM"),
+    month: zod_1.z.string().regex(/^\d{4}-\d{2}$/, "Use formato YYYY-MM").optional(),
+});
+exports.createOrGetSessionSchema = zod_1.z.object({
+    date: zod_1.z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use formato YYYY-MM-DD"),
+});
+const attendanceStatusSchema = zod_1.z.enum(["presente", "ausente", "justificado"]);
+exports.putBulkAttendanceSchema = zod_1.z.object({
+    records: zod_1.z.array(zod_1.z.object({
+        participantId: zod_1.z.string().uuid("participantId deve ser um UUID válido"),
+        status: attendanceStatusSchema,
+        notes: zod_1.z.string().optional().nullable(),
+    })),
 });
 //# sourceMappingURL=classes.dto.js.map

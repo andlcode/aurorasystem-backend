@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireClassOwnerOrAdmin = requireClassOwnerOrAdmin;
 const prisma_1 = require("../lib/prisma");
 /**
- * Middleware que exige evangelizador/super_admin OU ser o responsável da turma.
+ * Middleware que exige evangelizador/super_admin OU ser o responsável (moderador) da turma.
  * Deve ser usado após authJwt. Usa req.user. O :id deve ser o classId.
  */
 async function requireClassOwnerOrAdmin(req, res, next) {

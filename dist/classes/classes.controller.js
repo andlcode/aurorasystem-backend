@@ -43,6 +43,9 @@ exports.removeParticipant = removeParticipant;
 exports.listParticipants = listParticipants;
 exports.openSession = openSession;
 exports.listSessions = listSessions;
+exports.createOrGetSession = createOrGetSession;
+exports.getSessionById = getSessionById;
+exports.putBulkAttendance = putBulkAttendance;
 const classes_dto_1 = require("./classes.dto");
 const dateUtils_1 = require("../utils/dateUtils");
 const classesService = __importStar(require("./classes.service"));
@@ -173,6 +176,59 @@ async function listSessions(req, res) {
     catch (err) {
         const msg = err instanceof Error ? err.message : "Erro ao listar sessões";
         res.status(404).json({ error: msg });
+    }
+}
+async function createOrGetSession(req, res) {
+    const { id: classId } = req.params;
+    const parsed = classes_dto_1.createOrGetSessionSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+        res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
+        return;
+    }
+    const dateString = parsed.data.date;
+    try {
+        const session = await classesService.openSession(classId, dateString, req.userId);
+        res.status(201).json(session);
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : "Erro ao abrir sessão";
+        res.status(404).json({ error: msg });
+    }
+}
+async function getSessionById(req, res) {
+    const { id: classId, sessionId } = req.params;
+    try {
+        const session = await classesService.getSessionById(classId, sessionId);
+        if (!session) {
+            res.status(404).json({ error: "Sessão não encontrada" });
+            return;
+        }
+        res.json(session);
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : "Erro ao buscar sessão";
+        res.status(404).json({ error: msg });
+    }
+}
+async function putBulkAttendance(req, res) {
+    const { id: classId, sessionId } = req.params;
+    const parsed = classes_dto_1.putBulkAttendanceSchema.safeParse(req.body);
+    if (!parsed.success) {
+        res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
+        return;
+    }
+    try {
+        const result = await classesService.putBulkAttendance(classId, sessionId, parsed.data.records.map((r) => ({
+            participantId: r.participantId,
+            status: r.status,
+            notes: r.notes,
+        })), req.userId);
+        res.json(result);
+    }
+    catch (err) {
+        const msg = err instanceof Error ? err.message : "Erro ao salvar presença";
+        const status = msg.includes("não encontrad") ? 404 : 400;
+        res.status(status).json({ error: msg });
     }
 }
 //# sourceMappingURL=classes.controller.js.map

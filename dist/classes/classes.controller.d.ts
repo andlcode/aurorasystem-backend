@@ -9,4 +9,7 @@ export declare function removeParticipant(req: Request, res: Response): Promise<
 export declare function listParticipants(req: Request, res: Response): Promise<void>;
 export declare function openSession(req: Request, res: Response): Promise<void>;
 export declare function listSessions(req: Request, res: Response): Promise<void>;
+export declare function createOrGetSession(req: Request, res: Response): Promise<void>;
+export declare function getSessionById(req: Request, res: Response): Promise<void>;
+export declare function putBulkAttendance(req: Request, res: Response): Promise<void>;
 //# sourceMappingURL=classes.controller.d.ts.map

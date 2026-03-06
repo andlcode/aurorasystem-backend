@@ -65,11 +65,32 @@ router.post(
   asyncHandler(classesController.openSession)
 );
 
+router.post(
+  "/:id/sessions",
+  requireAuth,
+  asyncHandler(requireClassOwnerOrAdmin),
+  asyncHandler(classesController.createOrGetSession)
+);
+
 router.get(
   "/:id/sessions",
   requireAuth,
   asyncHandler(requireClassOwnerOrAdmin),
   asyncHandler(classesController.listSessions)
+);
+
+router.get(
+  "/:id/sessions/:sessionId",
+  requireAuth,
+  asyncHandler(requireClassOwnerOrAdmin),
+  asyncHandler(classesController.getSessionById)
+);
+
+router.put(
+  "/:id/sessions/:sessionId/attendance",
+  requireAuth,
+  asyncHandler(requireClassOwnerOrAdmin),
+  asyncHandler(classesController.putBulkAttendance)
 );
 
 export const classesRoutes = router;
