@@ -7,8 +7,6 @@ import { classesRoutes } from "./classes/classes.routes";
 import { peopleRoutes } from "./people/people.routes";
 import { sessionsRoutes } from "./sessions/sessions.routes";
 import { statsRoutes } from "./stats/stats.routes";
-import { on } from "events";
-import { Server } from "http";
 
 const app = express();
 
