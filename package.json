@@ -3,16 +3,16 @@
   "version": "1.0.0",
   "description": "Backend API com Node.js, TypeScript e Express",
   "main": "dist/index.js",
-  "scripts": {
-    "dev": "tsx watch src/index.ts",
-"build": "prisma generate && prisma migrate deploy && tsc",
-"start": "node dist/index.js",
-    "postinstall": "prisma generate",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts"
-  },
+"scripts": {
+  "dev": "tsx watch src/index.ts",
+  "build": "prisma generate && tsc",
+  "start": "prisma migrate deploy && node dist/index.js",
+  "postinstall": "prisma generate",
+  "db:generate": "prisma generate",
+  "db:migrate": "prisma migrate dev",
+  "db:push": "prisma db push",
+  "db:seed": "tsx prisma/seed.ts"
+},
   "dependencies": {
     "@prisma/client": "^6.19.2",
     "bcrypt": "^6.0.0",
