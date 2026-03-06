@@ -11,7 +11,8 @@ import { on } from "events";
 import { Server } from "http";
 
 const app = express();
-
+process.on("unhandledRejection", (err) => console.error("unhandledRejection:", err));
+process.on("uncaughtException", (err) => console.error("uncaughtException:", err));
 
 app.set("trust proxy", 1);
 app.use(corsMiddleware);
