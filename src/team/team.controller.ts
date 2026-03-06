@@ -8,6 +8,27 @@ import {
 } from "./team.dto";
 import type { WorkerRole } from "@prisma/client";
 
+export async function listTeamResponsibles(req: Request, res: Response) {
+  const responsibles = await prisma.people.findMany({
+    where: {
+      type: "worker",
+      worker: {
+        role: { in: ["evangelizador", "super_admin"] as WorkerRole[] },
+      },
+    },
+    include: { worker: true },
+    orderBy: { fullName: "asc" },
+  });
+
+  res.json(
+    responsibles.map((p) => ({
+      id: p.id,
+      fullName: p.fullName,
+      role: p.worker?.role,
+    }))
+  );
+}
+
 export async function listTeam(req: Request, res: Response) {
   const parsed = listTeamQuerySchema.safeParse(req.query);
   if (!parsed.success) {

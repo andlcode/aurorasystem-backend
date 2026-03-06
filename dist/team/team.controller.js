@@ -1,5 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.listTeamResponsibles = listTeamResponsibles;
 exports.listTeam = listTeam;
 exports.createTeamMember = createTeamMember;
 exports.getTeamMemberById = getTeamMemberById;
@@ -7,6 +8,23 @@ exports.patchTeamMember = patchTeamMember;
 const prisma_1 = require("../lib/prisma");
 const hash_1 = require("../utils/hash");
 const team_dto_1 = require("./team.dto");
+async function listTeamResponsibles(req, res) {
+    const responsibles = await prisma_1.prisma.people.findMany({
+        where: {
+            type: "worker",
+            worker: {
+                role: { in: ["evangelizador", "super_admin"] },
+            },
+        },
+        include: { worker: true },
+        orderBy: { fullName: "asc" },
+    });
+    res.json(responsibles.map((p) => ({
+        id: p.id,
+        fullName: p.fullName,
+        role: p.worker?.role,
+    })));
+}
 async function listTeam(req, res) {
     const parsed = team_dto_1.listTeamQuerySchema.safeParse(req.query);
     if (!parsed.success) {

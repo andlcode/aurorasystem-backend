@@ -9,6 +9,7 @@ router.use(authJwt);
 router.use(requireRole("super_admin"));
 
 router.get("/", asyncHandler(teamController.listTeam));
+router.get("/responsibles", asyncHandler(teamController.listTeamResponsibles));
 router.post("/", asyncHandler(teamController.createTeamMember));
 router.get("/:id", asyncHandler(teamController.getTeamMemberById));
 router.patch("/:id", asyncHandler(teamController.patchTeamMember));

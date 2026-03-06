@@ -23,7 +23,7 @@ async function listResponsibles() {
         where: {
             type: "worker",
             worker: {
-                role: { in: ["worker", "evangelizador", "super_admin"] },
+                role: { in: ["evangelizador", "super_admin"] },
             },
         },
         include: { worker: true },
@@ -41,10 +41,10 @@ async function createClass(data, createdByPersonId) {
         include: { worker: true },
     });
     if (!responsible?.worker) {
-        throw new Error("responsibleUserId deve ser uma pessoa do tipo worker com role moderador, evangelizador ou super_admin");
+        throw new Error("O responsável deve ser um evangelizador ou super_admin.");
     }
-    if (!["worker", "evangelizador", "super_admin"].includes(responsible.worker.role)) {
-        throw new Error("O responsável deve ter role moderador, evangelizador ou super_admin");
+    if (!["evangelizador", "super_admin"].includes(responsible.worker.role)) {
+        throw new Error("O responsável deve ser um evangelizador ou super_admin.");
     }
     return prisma_js_1.prisma.class.create({
         data: {
@@ -88,8 +88,8 @@ async function patchClass(classId, data, role, personId) {
             where: { id: data.responsibleUserId },
             include: { worker: true },
         });
-        if (!responsible?.worker || !["worker", "evangelizador", "super_admin"].includes(responsible.worker.role)) {
-            throw new Error("responsibleUserId deve ser uma pessoa com role moderador, evangelizador ou super_admin");
+        if (!responsible?.worker || !["evangelizador", "super_admin"].includes(responsible.worker.role)) {
+            throw new Error("O responsável deve ser um evangelizador ou super_admin.");
         }
     }
     return prisma_js_1.prisma.class.update({
@@ -154,6 +154,9 @@ async function removeParticipant(classId, participantId) {
     });
 }
 async function listParticipants(classId) {
+    const class_ = await prisma_js_1.prisma.class.findUnique({ where: { id: classId } });
+    if (!class_)
+        throw new Error("Turma não encontrada");
     const participants = await prisma_js_1.prisma.classParticipant.findMany({
         where: { classId },
         include: { participant: true },

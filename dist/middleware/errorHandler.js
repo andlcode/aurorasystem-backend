@@ -13,7 +13,7 @@ function errorHandler(err, _req, res, _next) {
             res.status(403).json({ error: "Origem não permitida" });
             return;
         }
-        if (err.message.includes("não encontrado") || err.message.includes("not found")) {
+        if (err.message.includes("não encontrad") || err.message.includes("not found")) {
             res.status(404).json({ error: err.message });
             return;
         }
