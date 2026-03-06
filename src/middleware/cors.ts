@@ -22,3 +22,6 @@ export const corsMiddleware = cors({
   credentials: true,
   optionsSuccessStatus: 200,
 });
+
+
+
