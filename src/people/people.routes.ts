@@ -9,13 +9,13 @@ router.use(authJwt);
 
 router.post(
   "/",
-  requireRole("admin", "super_admin"),
+  requireRole("admin", "super_admin", "worker"),
   asyncHandler(peopleController.createPeople)
 );
 
 router.get(
   "/",
-  requireRole("admin", "super_admin"),
+  requireRole("admin", "super_admin", "worker"),
   asyncHandler(peopleController.listPeople)
 );
 
