@@ -1,8 +1,5 @@
 -- Migration corretiva: garante que Class, ClassParticipant e ClassMembership estejam
 -- alinhados ao schema atual. Idempotente e segura para produção.
---
--- PRÉ-REQUISITO: prisma migrate resolve --rolled-back 20250301000000_restructure_classes
--- (ou 20250303100000_restructure_classes, conforme o nome em produção)
 
 -- ========== PARTE 1: ClassParticipant e ClassMembership ==========
 -- Cria ClassParticipant se não existir
