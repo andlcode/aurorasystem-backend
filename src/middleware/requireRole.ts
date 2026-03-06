@@ -8,14 +8,22 @@ import type { WorkerRole } from "@prisma/client";
 export function requireRole(...allowedRoles: WorkerRole[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
+    const currentRole = user?.role ?? req.userRole;
 
-    if (!user) {
+    console.log("[requireRole] Verificando role:", { currentRole, allowedRoles, path: req.path });
+
+    if (!user && currentRole === undefined) {
+      console.log("[requireRole] 401: Usuário não autenticado (req.user ausente)");
       res.status(401).json({ error: "Autenticação necessária" });
       return;
     }
 
-    if (!allowedRoles.includes(user.role)) {
-      res.status(403).json({ error: "Sem permissão para esta ação" });
+    if (!currentRole || !allowedRoles.includes(currentRole)) {
+      console.log("[requireRole] 403: Role insuficiente. role:", currentRole, "permitidas:", allowedRoles);
+      res.status(403).json({
+        error: "Acesso negado: role insuficiente",
+        details: { currentRole: currentRole ?? "nenhuma", requiredRoles: allowedRoles },
+      });
       return;
     }
 

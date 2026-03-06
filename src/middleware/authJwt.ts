@@ -20,6 +20,7 @@ export function authJwt(req: Request, res: Response, next: NextFunction) {
     : undefined;
 
   if (!token) {
+    console.log("[authJwt] Token não informado no header Authorization");
     res.status(401).json({ error: "Token não informado" });
     return;
   }
@@ -32,11 +33,13 @@ export function authJwt(req: Request, res: Response, next: NextFunction) {
 
   try {
     const decoded = jwt.verify(token, secret) as JwtPayload;
+    console.log("[authJwt] Payload decodificado:", { userId: decoded.userId, personId: decoded.personId, role: decoded.role });
     req.user = decoded;
     req.userId = decoded.personId;
     req.userRole = decoded.role;
     next();
-  } catch {
+  } catch (err) {
+    console.log("[authJwt] Token inválido ou expirado:", err instanceof Error ? err.message : String(err));
     res.status(401).json({ error: "Token inválido ou expirado" });
   }
 }
