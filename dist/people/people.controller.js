@@ -2,10 +2,16 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createPeople = createPeople;
 exports.listPeople = listPeople;
+exports.listResponsaveis = listResponsaveis;
 exports.getPeopleById = getPeopleById;
 exports.patchPeople = patchPeople;
 const prisma_1 = require("../lib/prisma");
 const people_dto_1 = require("./people.dto");
+const RESPONSIBLE_ROLE_LABELS = {
+    super_admin: "super_admin",
+    evangelizador: "evangelizador",
+    worker: "moderador",
+};
 async function createPeople(req, res) {
     const parsed = people_dto_1.createPeopleSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -62,6 +68,37 @@ async function listPeople(req, res) {
         orderBy: { fullName: "asc" },
     });
     res.json(people);
+}
+async function listResponsaveis(req, res) {
+    const responsaveis = await prisma_1.prisma.people.findMany({
+        where: {
+            type: "worker",
+            status: "active",
+            authUser: {
+                is: {
+                    isActive: true,
+                },
+            },
+            worker: {
+                role: {
+                    in: ["super_admin", "evangelizador", "worker"],
+                },
+            },
+        },
+        include: {
+            worker: true,
+            authUser: true,
+        },
+        orderBy: {
+            fullName: "asc",
+        },
+    });
+    res.json(responsaveis.map((person) => ({
+        id: person.id,
+        name: person.fullName,
+        email: person.email ?? person.authUser?.email ?? null,
+        role: person.worker ? RESPONSIBLE_ROLE_LABELS[person.worker.role] : null,
+    })));
 }
 async function getPeopleById(req, res) {
     const { id } = req.params;

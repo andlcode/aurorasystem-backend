@@ -7,6 +7,12 @@ import {
 } from "./people.dto";
 import type { PersonType, Prisma, WorkerRole } from "@prisma/client";
 
+const RESPONSIBLE_ROLE_LABELS: Record<WorkerRole, "super_admin" | "evangelizador" | "moderador"> = {
+  super_admin: "super_admin",
+  evangelizador: "evangelizador",
+  worker: "moderador",
+};
+
 export async function createPeople(req: Request, res: Response) {
   const parsed = createPeopleSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -72,6 +78,41 @@ export async function listPeople(req: Request, res: Response) {
   });
 
   res.json(people);
+}
+
+export async function listResponsaveis(req: Request, res: Response) {
+  const responsaveis = await prisma.people.findMany({
+    where: {
+      type: "worker",
+      status: "active",
+      authUser: {
+        is: {
+          isActive: true,
+        },
+      },
+      worker: {
+        role: {
+          in: ["super_admin", "evangelizador", "worker"] as WorkerRole[],
+        },
+      },
+    },
+    include: {
+      worker: true,
+      authUser: true,
+    },
+    orderBy: {
+      fullName: "asc",
+    },
+  });
+
+  res.json(
+    responsaveis.map((person) => ({
+      id: person.id,
+      name: person.fullName,
+      email: person.email ?? person.authUser?.email ?? null,
+      role: person.worker ? RESPONSIBLE_ROLE_LABELS[person.worker.role] : null,
+    }))
+  );
 }
 
 export async function getPeopleById(req: Request, res: Response) {

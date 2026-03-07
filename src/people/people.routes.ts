@@ -20,6 +20,12 @@ router.get(
 );
 
 router.get(
+  "/responsaveis",
+  requireRole("evangelizador", "super_admin", "worker"),
+  asyncHandler(peopleController.listResponsaveis)
+);
+
+router.get(
   "/:id",
   requireRole("evangelizador", "super_admin", "worker"),
   asyncHandler(peopleController.getPeopleById)

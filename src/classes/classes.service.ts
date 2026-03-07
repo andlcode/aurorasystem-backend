@@ -19,7 +19,7 @@ export async function listResponsibles() {
         },
       },
       worker: {
-        role: { in: ["evangelizador", "super_admin"] as WorkerRole[] },
+        role: { in: ["evangelizador", "super_admin", "worker"] as WorkerRole[] },
       },
     },
     include: { worker: true, authUser: true },
@@ -49,11 +49,11 @@ export async function createClass(data: CreateClassInput, createdByPersonId: str
   });
 
   if (!responsible?.worker) {
-    throw new Error("O responsável deve ser um evangelizador ou super_admin.");
+    throw new Error("O responsável deve ser um evangelizador, super_admin ou moderador.");
   }
 
-  if (!["evangelizador", "super_admin"].includes(responsible.worker.role)) {
-    throw new Error("O responsável deve ser um evangelizador ou super_admin.");
+  if (!["evangelizador", "super_admin", "worker"].includes(responsible.worker.role)) {
+    throw new Error("O responsável deve ser um evangelizador, super_admin ou moderador.");
   }
 
   return prisma.class.create({
@@ -118,8 +118,8 @@ export async function patchClass(
       where: { id: data.responsibleUserId },
       include: { worker: true },
     });
-    if (!responsible?.worker || !["evangelizador", "super_admin"].includes(responsible.worker.role)) {
-      throw new Error("O responsável deve ser um evangelizador ou super_admin.");
+    if (!responsible?.worker || !["evangelizador", "super_admin", "worker"].includes(responsible.worker.role)) {
+      throw new Error("O responsável deve ser um evangelizador, super_admin ou moderador.");
     }
   }
 
