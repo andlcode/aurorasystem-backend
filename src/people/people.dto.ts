@@ -63,3 +63,15 @@ export const patchPeopleSchema = z
   );
 
 export type PatchPeopleInput = z.infer<typeof patchPeopleSchema>;
+
+export const patchPeopleStatusSchema = z.object({
+  status: personStatusEnum,
+});
+
+export type PatchPeopleStatusInput = z.infer<typeof patchPeopleStatusSchema>;
+
+export const assignParticipantClassSchema = z.object({
+  classId: z.string().uuid("classId deve ser um UUID válido"),
+});
+
+export type AssignParticipantClassInput = z.infer<typeof assignParticipantClassSchema>;

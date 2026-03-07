@@ -117,4 +117,20 @@ export declare const patchPeopleSchema: z.ZodEffects<z.ZodObject<{
     phone?: string | null | undefined;
 }>;
 export type PatchPeopleInput = z.infer<typeof patchPeopleSchema>;
+export declare const patchPeopleStatusSchema: z.ZodObject<{
+    status: z.ZodEnum<["active", "inactive"]>;
+}, "strip", z.ZodTypeAny, {
+    status: "active" | "inactive";
+}, {
+    status: "active" | "inactive";
+}>;
+export type PatchPeopleStatusInput = z.infer<typeof patchPeopleStatusSchema>;
+export declare const assignParticipantClassSchema: z.ZodObject<{
+    classId: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    classId: string;
+}, {
+    classId: string;
+}>;
+export type AssignParticipantClassInput = z.infer<typeof assignParticipantClassSchema>;
 //# sourceMappingURL=people.dto.d.ts.map

@@ -32,8 +32,26 @@ router.get(
 );
 
 router.patch(
+  "/:id/status",
+  requireRole("super_admin"),
+  asyncHandler(peopleController.patchPeopleStatus)
+);
+
+router.patch(
+  "/:id/class",
+  requireRole("super_admin"),
+  asyncHandler(peopleController.assignParticipantClass)
+);
+
+router.put(
   "/:id",
-  requireRole("evangelizador", "super_admin"),
+  requireRole("super_admin"),
+  asyncHandler(peopleController.patchPeople)
+);
+
+router.patch(
+  "/:id",
+  requireRole("super_admin"),
   asyncHandler(peopleController.patchPeople)
 );
 

@@ -44,6 +44,11 @@ export async function createClass(req: Request, res: Response) {
 
 export async function listClasses(req: Request, res: Response) {
   try {
+    console.log("[Classes] Entrada na rota GET /classes", {
+      userRole: req.userRole,
+      userId: req.userId,
+    });
+
     const role = req.userRole;
     const personId = req.userId;
 

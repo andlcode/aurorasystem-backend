@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.patchPeopleSchema = exports.listPeopleQuerySchema = exports.createPeopleSchema = void 0;
+exports.assignParticipantClassSchema = exports.patchPeopleStatusSchema = exports.patchPeopleSchema = exports.listPeopleQuerySchema = exports.createPeopleSchema = void 0;
 const zod_1 = require("zod");
 const personTypeEnum = zod_1.z.enum(["worker", "participant"]);
 const personStatusEnum = zod_1.z.enum(["active", "inactive"]);
@@ -48,4 +48,10 @@ exports.patchPeopleSchema = zod_1.z
         return false;
     return true;
 }, { message: "Não é possível promover para super_admin via PATCH", path: ["role"] });
+exports.patchPeopleStatusSchema = zod_1.z.object({
+    status: personStatusEnum,
+});
+exports.assignParticipantClassSchema = zod_1.z.object({
+    classId: zod_1.z.string().uuid("classId deve ser um UUID válido"),
+});
 //# sourceMappingURL=people.dto.js.map

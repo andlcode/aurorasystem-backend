@@ -45,6 +45,9 @@ router.post("/", (0, requireRole_1.requireRole)("evangelizador", "super_admin", 
 router.get("/", (0, requireRole_1.requireRole)("evangelizador", "super_admin", "worker"), (0, asyncHandler_1.asyncHandler)(peopleController.listPeople));
 router.get("/responsaveis", (0, requireRole_1.requireRole)("evangelizador", "super_admin", "worker"), (0, asyncHandler_1.asyncHandler)(peopleController.listResponsaveis));
 router.get("/:id", (0, requireRole_1.requireRole)("evangelizador", "super_admin", "worker"), (0, asyncHandler_1.asyncHandler)(peopleController.getPeopleById));
-router.patch("/:id", (0, requireRole_1.requireRole)("evangelizador", "super_admin"), (0, asyncHandler_1.asyncHandler)(peopleController.patchPeople));
+router.patch("/:id/status", (0, requireRole_1.requireRole)("super_admin"), (0, asyncHandler_1.asyncHandler)(peopleController.patchPeopleStatus));
+router.patch("/:id/class", (0, requireRole_1.requireRole)("super_admin"), (0, asyncHandler_1.asyncHandler)(peopleController.assignParticipantClass));
+router.put("/:id", (0, requireRole_1.requireRole)("super_admin"), (0, asyncHandler_1.asyncHandler)(peopleController.patchPeople));
+router.patch("/:id", (0, requireRole_1.requireRole)("super_admin"), (0, asyncHandler_1.asyncHandler)(peopleController.patchPeople));
 exports.peopleRoutes = router;
 //# sourceMappingURL=people.routes.js.map

@@ -1,9 +1,12 @@
 import type { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
+import * as classesService from "../classes/classes.service";
 import {
   createPeopleSchema,
   listPeopleQuerySchema,
   patchPeopleSchema,
+  patchPeopleStatusSchema,
+  assignParticipantClassSchema,
 } from "./people.dto";
 import type { PersonType, Prisma, WorkerRole } from "@prisma/client";
 
@@ -12,6 +15,44 @@ const RESPONSIBLE_ROLE_LABELS: Record<WorkerRole, "super_admin" | "evangelizador
   evangelizador: "evangelizador",
   worker: "moderador",
 };
+
+const peopleWithClassesInclude = {
+  worker: true,
+  classParticipants: {
+    include: {
+      class_: {
+        select: {
+          id: true,
+          name: true,
+          day: true,
+          time: true,
+        },
+      },
+    },
+    orderBy: {
+      class_: {
+        name: "asc" as const,
+      },
+    },
+  },
+};
+
+type PersonWithClasses = Prisma.PeopleGetPayload<{
+  include: typeof peopleWithClassesInclude;
+}>;
+
+function serializePerson(person: PersonWithClasses) {
+  return {
+    ...person,
+    classes: person.classParticipants.map((item) => ({
+      id: item.class_.id,
+      name: item.class_.name,
+      day: item.class_.day,
+      time: item.class_.time,
+      linkedAt: item.createdAt,
+    })),
+  };
+}
 
 export async function createPeople(req: Request, res: Response) {
   const parsed = createPeopleSchema.safeParse(req.body);
@@ -73,11 +114,11 @@ export async function listPeople(req: Request, res: Response) {
 
   const people = await prisma.people.findMany({
     where,
-    include: { worker: true },
+    include: peopleWithClassesInclude,
     orderBy: { fullName: "asc" },
   });
 
-  res.json(people);
+  res.json(people.map(serializePerson));
 }
 
 export async function listResponsaveis(req: Request, res: Response) {
@@ -120,7 +161,7 @@ export async function getPeopleById(req: Request, res: Response) {
 
   const person = await prisma.people.findUnique({
     where: { id },
-    include: { worker: true },
+    include: peopleWithClassesInclude,
   });
 
   if (!person) {
@@ -128,7 +169,7 @@ export async function getPeopleById(req: Request, res: Response) {
     return;
   }
 
-  res.json(person);
+  res.json(serializePerson(person));
 }
 
 export async function patchPeople(req: Request, res: Response) {
@@ -143,7 +184,7 @@ export async function patchPeople(req: Request, res: Response) {
 
   const existing = await prisma.people.findUnique({
     where: { id },
-    include: { worker: true },
+    include: peopleWithClassesInclude,
   });
   if (!existing) {
     res.status(404).json({ error: "Pessoa não encontrada" });
@@ -192,8 +233,75 @@ export async function patchPeople(req: Request, res: Response) {
           },
         }),
     },
-    include: { worker: true },
+    include: peopleWithClassesInclude,
   });
 
-  res.json(person);
+  res.json(serializePerson(person));
+}
+
+export async function patchPeopleStatus(req: Request, res: Response) {
+  const { id } = req.params;
+  const parsed = patchPeopleStatusSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
+    return;
+  }
+
+  const existing = await prisma.people.findUnique({
+    where: { id },
+    include: peopleWithClassesInclude,
+  });
+
+  if (!existing || existing.type !== "participant") {
+    res.status(404).json({ error: "Aluno não encontrado" });
+    return;
+  }
+
+  const updated = await prisma.people.update({
+    where: { id },
+    data: { status: parsed.data.status },
+    include: peopleWithClassesInclude,
+  });
+
+  res.json(serializePerson(updated));
+}
+
+export async function assignParticipantClass(req: Request, res: Response) {
+  const { id } = req.params;
+  const parsed = assignParticipantClassSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
+    return;
+  }
+
+  const participant = await prisma.people.findUnique({
+    where: { id },
+    include: peopleWithClassesInclude,
+  });
+
+  if (!participant || participant.type !== "participant") {
+    res.status(404).json({ error: "Aluno não encontrado" });
+    return;
+  }
+
+  try {
+    await classesService.addParticipant(parsed.data.classId, { participantId: id });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Erro ao vincular aluno à turma";
+    const status = msg.includes("não encontrad") ? 404 : 400;
+    res.status(status).json({ error: msg });
+    return;
+  }
+
+  const updated = await prisma.people.findUnique({
+    where: { id },
+    include: peopleWithClassesInclude,
+  });
+
+  if (!updated) {
+    res.status(404).json({ error: "Aluno não encontrado" });
+    return;
+  }
+
+  res.json(serializePerson(updated));
 }
