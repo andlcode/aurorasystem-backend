@@ -50,8 +50,15 @@ const classes_dto_1 = require("./classes.dto");
 const dateUtils_1 = require("../utils/dateUtils");
 const classesService = __importStar(require("./classes.service"));
 async function listResponsibles(req, res) {
-    const responsibles = await classesService.listResponsibles();
-    res.json(responsibles);
+    try {
+        const responsibles = await classesService.listResponsibles();
+        console.log("[Classes] GET /classes/responsibles retorno:", responsibles);
+        res.json(responsibles);
+    }
+    catch (err) {
+        console.error("[Classes] Erro ao listar responsáveis:", err);
+        res.status(500).json({ error: "Erro ao carregar responsáveis disponíveis" });
+    }
 }
 async function createClass(req, res) {
     const parsed = classes_dto_1.createClassSchema.safeParse(req.body);
@@ -60,6 +67,7 @@ async function createClass(req, res) {
         return;
     }
     try {
+        console.log("[Classes] POST /classes payload:", parsed.data);
         const class_ = await classesService.createClass(parsed.data, req.userId ?? null);
         res.status(201).json(class_);
     }
@@ -69,10 +77,21 @@ async function createClass(req, res) {
     }
 }
 async function listClasses(req, res) {
-    const role = req.userRole;
-    const personId = req.userId;
-    const classes = await classesService.listClasses(role, personId);
-    res.json(classes);
+    try {
+        const role = req.userRole;
+        const personId = req.userId;
+        if (!role || !personId) {
+            res.status(401).json({ error: "Autenticação necessária" });
+            return;
+        }
+        const classes = await classesService.listClasses(role, personId);
+        console.log("[Classes] GET /classes retorno:", classes);
+        res.json(classes);
+    }
+    catch (err) {
+        console.error("[Classes] Erro detalhado ao listar turmas:", err);
+        res.status(500).json({ error: "Erro ao carregar turmas" });
+    }
 }
 async function getClassById(req, res) {
     const { id: classId } = req.params;

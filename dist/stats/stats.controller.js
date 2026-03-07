@@ -6,7 +6,14 @@ exports.getClassesStats = getClassesStats;
 exports.getClassDetailStats = getClassDetailStats;
 const prisma_1 = require("../lib/prisma");
 const dateUtils_1 = require("../utils/dateUtils");
+const stats_dto_1 = require("./stats.dto");
 const DASHBOARD_MONTHS = 6;
+const DAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
+const STATUS_LABELS = {
+    present: "Presente",
+    absent: "Ausente",
+    justified: "Justificada",
+};
 function roundPercentage(value) {
     return Math.round(value * 10) / 10;
 }
@@ -15,6 +22,12 @@ function toDateOnly(value) {
         return value.slice(0, 10);
     }
     return value.toISOString().slice(0, 10);
+}
+function toUtcDateStart(dateString) {
+    return new Date(`${dateString}T00:00:00.000Z`);
+}
+function toUtcDateEnd(dateString) {
+    return new Date(`${dateString}T23:59:59.999Z`);
 }
 function getLastMonthsSeries(totalMonths) {
     const formatter = new Intl.DateTimeFormat("pt-BR", {
@@ -39,6 +52,32 @@ function getLastMonthsSeries(totalMonths) {
         });
     }
     return series;
+}
+function getMonthSeriesFromRange(start, end) {
+    if (!start || !end) {
+        return getLastMonthsSeries(DASHBOARD_MONTHS);
+    }
+    const formatter = new Intl.DateTimeFormat("pt-BR", {
+        month: "short",
+        year: "2-digit",
+        timeZone: "UTC",
+    });
+    const series = [];
+    const cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1));
+    const limit = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), 1));
+    while (cursor <= limit) {
+        const year = cursor.getUTCFullYear();
+        const month = cursor.getUTCMonth() + 1;
+        const key = `${year}-${String(month).padStart(2, "0")}`;
+        const label = formatter.format(cursor).replace(".", "");
+        series.push({
+            month: key,
+            label: label.charAt(0).toUpperCase() + label.slice(1),
+            averageAttendance: 0,
+        });
+        cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
+    return series.length > 0 ? series : getLastMonthsSeries(DASHBOARD_MONTHS);
 }
 async function getOverview(req, res) {
     const { start, end } = (0, dateUtils_1.getCurrentMonthRangeBahia)();
@@ -79,39 +118,102 @@ async function getOverview(req, res) {
     res.json(body);
 }
 async function getDashboard(req, res) {
+    const parsed = stats_dto_1.dashboardQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+        res.status(400).json({ error: "Filtros inválidos", details: parsed.error.errors });
+        return;
+    }
     const role = req.user?.role ?? req.userRole;
     const personId = req.user?.personId ?? req.userId;
     const canViewAll = role === "super_admin" || role === "evangelizador";
     const classWhere = canViewAll ? {} : { responsibleUserId: personId };
-    const monthSeries = getLastMonthsSeries(DASHBOARD_MONTHS);
+    const filters = parsed.data;
+    const filterStart = filters.from ? toUtcDateStart(filters.from) : undefined;
+    const filterEnd = filters.to ? toUtcDateEnd(filters.to) : undefined;
+    const monthSeries = getMonthSeriesFromRange(filterStart, filterEnd);
     const monthLookup = new Map(monthSeries.map((item) => [
         item.month,
         { present: 0, total: 0, label: item.label },
     ]));
+    const dayLookup = new Map(DAY_LABELS.map((label, day) => [day, { label, present: 0, total: 0 }]));
     const { start, end } = (0, dateUtils_1.getCurrentMonthRangeBahia)();
     const accessibleClasses = await prisma_1.prisma.class.findMany({
         where: classWhere,
         select: { id: true, name: true },
         orderBy: { name: "asc" },
     });
-    if (accessibleClasses.length === 0) {
+    const filteredClasses = filters.classId
+        ? accessibleClasses.filter((item) => item.id === filters.classId)
+        : accessibleClasses;
+    const classIds = filteredClasses.map((item) => item.id);
+    const activeTeamMembersPromise = prisma_1.prisma.people.count({
+        where: {
+            type: "worker",
+            status: "active",
+        },
+    });
+    if (filteredClasses.length === 0) {
+        const totalTeamMembers = await activeTeamMembersPromise;
         const emptyBody = {
             totals: {
                 totalClasses: 0,
                 activeParticipants: 0,
                 sessionsThisMonth: 0,
                 averageAttendance: 0,
+                totalStudents: 0,
+                totalTeamMembers,
+                attendanceRate: 0,
+                totalAttendanceRecords: 0,
             },
             attendanceByClass: [],
             attendanceByMonth: monthSeries,
+            attendanceByDay: DAY_LABELS.map((label, day) => ({
+                day,
+                label,
+                averageAttendance: 0,
+                totalRecords: 0,
+            })),
+            statusDistribution: [
+                { status: "present", label: STATUS_LABELS.present, count: 0, percentage: 0 },
+                { status: "absent", label: STATUS_LABELS.absent, count: 0, percentage: 0 },
+                { status: "justified", label: STATUS_LABELS.justified, count: 0, percentage: 0 },
+            ],
             topAbsences: [],
+            mostActiveClasses: [],
+            newStudentsRecently: [],
             recentSessions: [],
+            filters: {
+                availableClasses: accessibleClasses,
+                selected: {
+                    from: filters.from ?? null,
+                    to: filters.to ?? null,
+                    classId: filters.classId ?? null,
+                    status: filters.status,
+                },
+            },
         };
         res.json(emptyBody);
         return;
     }
-    const classIds = accessibleClasses.map((item) => item.id);
-    const [activeParticipants, sessionsThisMonth, attendances, recentSessions] = await Promise.all([
+    const dateWhere = filterStart || filterEnd
+        ? {
+            ...(filterStart && { gte: filterStart }),
+            ...(filterEnd && { lte: filterEnd }),
+        }
+        : undefined;
+    const attendanceWhere = {
+        session: {
+            classId: { in: classIds },
+            ...(dateWhere && { sessionDate: dateWhere }),
+        },
+        participant: { type: "participant" },
+        ...(filters.status !== "all" && { status: filters.status }),
+    };
+    const sessionWhere = {
+        classId: { in: classIds },
+        ...(dateWhere && { sessionDate: dateWhere }),
+    };
+    const [activeParticipants, sessionsThisMonth, attendances, recentSessions, recentStudents, totalTeamMembers] = await Promise.all([
         prisma_1.prisma.classParticipant.findMany({
             where: {
                 classId: { in: classIds },
@@ -130,16 +232,15 @@ async function getDashboard(req, res) {
             },
         }),
         prisma_1.prisma.attendance.findMany({
-            where: {
-                session: { classId: { in: classIds } },
-                participant: { type: "participant" },
-            },
+            where: attendanceWhere,
             select: {
                 status: true,
                 participantId: true,
                 participant: {
                     select: {
                         fullName: true,
+                        email: true,
+                        createdAt: true,
                     },
                 },
                 session: {
@@ -156,9 +257,7 @@ async function getDashboard(req, res) {
             },
         }),
         prisma_1.prisma.classSession.findMany({
-            where: {
-                classId: { in: classIds },
-            },
+            where: sessionWhere,
             take: 8,
             orderBy: [{ sessionDate: "desc" }, { createdAt: "desc" }],
             select: {
@@ -171,28 +270,64 @@ async function getDashboard(req, res) {
                     },
                 },
                 attendances: {
+                    where: filters.status === "all" ? undefined : { status: filters.status },
                     select: {
                         status: true,
                     },
                 },
             },
         }),
+        prisma_1.prisma.classParticipant.findMany({
+            where: {
+                classId: { in: classIds },
+                participant: {
+                    type: "participant",
+                    status: "active",
+                },
+            },
+            include: {
+                participant: {
+                    select: {
+                        id: true,
+                        fullName: true,
+                        email: true,
+                        createdAt: true,
+                    },
+                },
+                class_: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+            take: 20,
+        }),
+        activeTeamMembersPromise,
     ]);
-    const classAttendanceMap = new Map(accessibleClasses.map((item) => [
+    const classAttendanceMap = new Map(filteredClasses.map((item) => [
         item.id,
-        { className: item.name, present: 0, total: 0 },
+        { className: item.name, present: 0, total: 0, sessionDates: new Set() },
     ]));
     const absenceMap = new Map();
+    const statusCounter = {
+        present: 0,
+        absent: 0,
+        justified: 0,
+    };
     let totalAttendances = 0;
     let totalPresent = 0;
     for (const attendance of attendances) {
         totalAttendances++;
+        statusCounter[attendance.status]++;
         if (attendance.status === "present") {
             totalPresent++;
         }
         const classStats = classAttendanceMap.get(attendance.session.classId);
         if (classStats) {
             classStats.total++;
+            classStats.sessionDates.add(toDateOnly(attendance.session.sessionDate));
             if (attendance.status === "present") {
                 classStats.present++;
             }
@@ -203,6 +338,16 @@ async function getDashboard(req, res) {
             monthStats.total++;
             if (attendance.status === "present") {
                 monthStats.present++;
+            }
+        }
+        const sessionDate = typeof attendance.session.sessionDate === "string"
+            ? new Date(attendance.session.sessionDate)
+            : attendance.session.sessionDate;
+        const dayStats = dayLookup.get(sessionDate.getUTCDay());
+        if (dayStats) {
+            dayStats.total++;
+            if (attendance.status === "present") {
+                dayStats.present++;
             }
         }
         const absenceKey = `${attendance.session.classId}:${attendance.participantId}`;
@@ -225,16 +370,33 @@ async function getDashboard(req, res) {
         }
         absenceMap.set(absenceKey, currentAbsence);
     }
+    const uniqueRecentStudents = new Map();
+    for (const entry of recentStudents) {
+        if (uniqueRecentStudents.has(entry.participant.id)) {
+            continue;
+        }
+        uniqueRecentStudents.set(entry.participant.id, {
+            participantId: entry.participant.id,
+            participantName: entry.participant.fullName,
+            email: entry.participant.email,
+            classId: entry.class_.id,
+            className: entry.class_.name,
+            joinedAt: toDateOnly(entry.createdAt),
+        });
+    }
+    const attendanceRate = totalAttendances > 0 ? roundPercentage((totalPresent / totalAttendances) * 100) : 0;
     const body = {
         totals: {
-            totalClasses: accessibleClasses.length,
+            totalClasses: filteredClasses.length,
             activeParticipants: activeParticipants.length,
             sessionsThisMonth,
-            averageAttendance: totalAttendances > 0
-                ? roundPercentage((totalPresent / totalAttendances) * 100)
-                : 0,
+            averageAttendance: attendanceRate,
+            totalStudents: activeParticipants.length,
+            totalTeamMembers,
+            attendanceRate,
+            totalAttendanceRecords: totalAttendances,
         },
-        attendanceByClass: accessibleClasses.map((item) => {
+        attendanceByClass: filteredClasses.map((item) => {
             const stats = classAttendanceMap.get(item.id);
             const averageAttendance = stats && stats.total > 0
                 ? roundPercentage((stats.present / stats.total) * 100)
@@ -254,6 +416,20 @@ async function getDashboard(req, res) {
                     : 0,
             };
         }),
+        attendanceByDay: Array.from(dayLookup.entries()).map(([day, stats]) => ({
+            day,
+            label: stats.label,
+            averageAttendance: stats.total > 0 ? roundPercentage((stats.present / stats.total) * 100) : 0,
+            totalRecords: stats.total,
+        })),
+        statusDistribution: ["present", "absent", "justified"].map((status) => ({
+            status,
+            label: STATUS_LABELS[status],
+            count: statusCounter[status],
+            percentage: totalAttendances > 0
+                ? roundPercentage((statusCounter[status] / totalAttendances) * 100)
+                : 0,
+        })),
         topAbsences: Array.from(absenceMap.values())
             .filter((item) => item.absences > 0)
             .sort((left, right) => {
@@ -263,6 +439,22 @@ async function getDashboard(req, res) {
             return left.participantName.localeCompare(right.participantName, "pt-BR");
         })
             .slice(0, 10),
+        mostActiveClasses: Array.from(classAttendanceMap.entries())
+            .map(([classId, stats]) => ({
+            classId,
+            className: stats.className,
+            sessionCount: stats.sessionDates.size,
+            totalAttendanceRecords: stats.total,
+            attendanceRate: stats.total > 0 ? roundPercentage((stats.present / stats.total) * 100) : 0,
+        }))
+            .sort((left, right) => {
+            if (right.sessionCount !== left.sessionCount) {
+                return right.sessionCount - left.sessionCount;
+            }
+            return right.totalAttendanceRecords - left.totalAttendanceRecords;
+        })
+            .slice(0, 8),
+        newStudentsRecently: Array.from(uniqueRecentStudents.values()).slice(0, 8),
         recentSessions: recentSessions.map((session) => ({
             sessionId: session.id,
             classId: session.classId,
@@ -271,6 +463,15 @@ async function getDashboard(req, res) {
             presentCount: session.attendances.filter((item) => item.status === "present").length,
             absentCount: session.attendances.filter((item) => item.status === "absent").length,
         })),
+        filters: {
+            availableClasses: accessibleClasses,
+            selected: {
+                from: filters.from ?? null,
+                to: filters.to ?? null,
+                classId: filters.classId ?? null,
+                status: filters.status,
+            },
+        },
     };
     res.json(body);
 }

@@ -22,20 +22,33 @@ async function listResponsibles() {
     const responsibles = await prisma_js_1.prisma.people.findMany({
         where: {
             type: "worker",
+            status: "active",
+            authUser: {
+                is: {
+                    isActive: true,
+                },
+            },
             worker: {
                 role: { in: ["evangelizador", "super_admin"] },
             },
         },
-        include: { worker: true },
+        include: { worker: true, authUser: true },
         orderBy: { fullName: "asc" },
     });
+    console.log("[Classes] Responsáveis elegíveis encontrados:", responsibles.length);
     return responsibles.map((p) => ({
         id: p.id,
+        name: p.fullName,
         fullName: p.fullName,
+        email: p.email ?? p.authUser?.email ?? null,
         role: p.worker?.role,
     }));
 }
 async function createClass(data, createdByPersonId) {
+    console.log("[Classes] Payload recebido para criar turma:", {
+        ...data,
+        createdByPersonId,
+    });
     const responsible = await prisma_js_1.prisma.people.findUnique({
         where: { id: data.responsibleUserId },
         include: { worker: true },
@@ -58,11 +71,17 @@ async function createClass(data, createdByPersonId) {
 }
 async function listClasses(role, personId) {
     const where = role === "super_admin" ? {} : { responsibleUserId: personId };
-    return prisma_js_1.prisma.class.findMany({
+    const classes = await prisma_js_1.prisma.class.findMany({
         where,
         include: classInclude,
         orderBy: { name: "asc" },
     });
+    console.log("[Classes] Listagem executada:", {
+        role,
+        personId,
+        total: classes.length,
+    });
+    return classes;
 }
 async function getClassById(classId, role, personId) {
     const class_ = await prisma_js_1.prisma.class.findUnique({

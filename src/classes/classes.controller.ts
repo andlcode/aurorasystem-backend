@@ -12,8 +12,14 @@ import { getLocalDateStringAmericaBahia } from "../utils/dateUtils";
 import * as classesService from "./classes.service";
 
 export async function listResponsibles(req: Request, res: Response) {
-  const responsibles = await classesService.listResponsibles();
-  res.json(responsibles);
+  try {
+    const responsibles = await classesService.listResponsibles();
+    console.log("[Classes] GET /classes/responsibles retorno:", responsibles);
+    res.json(responsibles);
+  } catch (err) {
+    console.error("[Classes] Erro ao listar responsáveis:", err);
+    res.status(500).json({ error: "Erro ao carregar responsáveis disponíveis" });
+  }
 }
 
 export async function createClass(req: Request, res: Response) {
@@ -24,6 +30,7 @@ export async function createClass(req: Request, res: Response) {
   }
 
   try {
+    console.log("[Classes] POST /classes payload:", parsed.data);
     const class_ = await classesService.createClass(
       parsed.data,
       req.userId ?? null
@@ -36,11 +43,22 @@ export async function createClass(req: Request, res: Response) {
 }
 
 export async function listClasses(req: Request, res: Response) {
-  const role = req.userRole!;
-  const personId = req.userId!;
+  try {
+    const role = req.userRole;
+    const personId = req.userId;
 
-  const classes = await classesService.listClasses(role, personId);
-  res.json(classes);
+    if (!role || !personId) {
+      res.status(401).json({ error: "Autenticação necessária" });
+      return;
+    }
+
+    const classes = await classesService.listClasses(role, personId);
+    console.log("[Classes] GET /classes retorno:", classes);
+    res.json(classes);
+  } catch (err) {
+    console.error("[Classes] Erro detalhado ao listar turmas:", err);
+    res.status(500).json({ error: "Erro ao carregar turmas" });
+  }
 }
 
 export async function getClassById(req: Request, res: Response) {

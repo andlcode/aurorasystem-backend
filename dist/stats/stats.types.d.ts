@@ -38,6 +38,10 @@ export interface DashboardTotals {
     activeParticipants: number;
     sessionsThisMonth: number;
     averageAttendance: number;
+    totalStudents: number;
+    totalTeamMembers: number;
+    attendanceRate: number;
+    totalAttendanceRecords: number;
 }
 export interface DashboardAttendanceByClassItem {
     classId: string;
@@ -65,11 +69,57 @@ export interface DashboardRecentSessionItem {
     presentCount: number;
     absentCount: number;
 }
+export interface DashboardAttendanceByDayItem {
+    day: number;
+    label: string;
+    averageAttendance: number;
+    totalRecords: number;
+}
+export interface DashboardStatusDistributionItem {
+    status: "present" | "absent" | "justified";
+    label: string;
+    count: number;
+    percentage: number;
+}
+export interface DashboardMostActiveClassItem {
+    classId: string;
+    className: string;
+    sessionCount: number;
+    totalAttendanceRecords: number;
+    attendanceRate: number;
+}
+export interface DashboardNewStudentItem {
+    participantId: string;
+    participantName: string;
+    email: string | null;
+    classId: string;
+    className: string;
+    joinedAt: string;
+}
+export interface DashboardFilterClassOption {
+    id: string;
+    name: string;
+}
+export interface DashboardSelectedFilters {
+    from: string | null;
+    to: string | null;
+    classId: string | null;
+    status: "all" | "present" | "absent" | "justified";
+}
+export interface DashboardFiltersMeta {
+    availableClasses: DashboardFilterClassOption[];
+    selected: DashboardSelectedFilters;
+}
 export interface StatsDashboardResponse {
     totals: DashboardTotals;
     attendanceByClass: DashboardAttendanceByClassItem[];
     attendanceByMonth: DashboardAttendanceByMonthItem[];
+    attendanceByDay: DashboardAttendanceByDayItem[];
+    statusDistribution: DashboardStatusDistributionItem[];
     topAbsences: DashboardTopAbsenceItem[];
+    mostActiveClasses: DashboardMostActiveClassItem[];
+    newStudentsRecently: DashboardNewStudentItem[];
     recentSessions: DashboardRecentSessionItem[];
+    filters: DashboardFiltersMeta;
 }
 //# sourceMappingURL=stats.types.d.ts.map

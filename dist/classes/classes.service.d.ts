@@ -2,7 +2,9 @@ import type { CreateClassInput, PatchClassInput, AddParticipantInput } from "./c
 import type { WorkerRole } from "@prisma/client";
 export declare function listResponsibles(): Promise<{
     id: string;
+    name: string;
     fullName: string;
+    email: string | null;
     role: import("@prisma/client").$Enums.WorkerRole | undefined;
 }[]>;
 export declare function createClass(data: CreateClassInput, createdByPersonId: string | null): Promise<{
