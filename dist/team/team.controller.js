@@ -9,20 +9,24 @@ const prisma_1 = require("../lib/prisma");
 const hash_1 = require("../utils/hash");
 const team_dto_1 = require("./team.dto");
 async function listTeamResponsibles(req, res) {
-    const responsibles = await prisma_1.prisma.people.findMany({
+    const responsibles = await prisma_1.prisma.user.findMany({
         where: {
-            type: "worker",
-            worker: {
-                role: { in: ["evangelizador", "super_admin"] },
-            },
+            status: "active",
+            role: { in: ["SUPER_ADMIN", "COORDENADOR", "EVANGELIZADOR"] },
         },
-        include: { worker: true },
-        orderBy: { fullName: "asc" },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            role: true,
+        },
+        orderBy: { name: "asc" },
     });
-    res.json(responsibles.map((p) => ({
-        id: p.id,
-        fullName: p.fullName,
-        role: p.worker?.role,
+    res.json(responsibles.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
     })));
 }
 async function listTeam(req, res) {
@@ -33,18 +37,16 @@ async function listTeam(req, res) {
     }
     const { q } = parsed.data;
     const where = {
-        type: "worker",
         ...(q?.trim() && {
             OR: [
-                { fullName: { contains: q.trim(), mode: "insensitive" } },
+                { name: { contains: q.trim(), mode: "insensitive" } },
                 { email: { contains: q.trim(), mode: "insensitive" } },
             ],
         }),
     };
-    const members = await prisma_1.prisma.people.findMany({
+    const members = await prisma_1.prisma.user.findMany({
         where,
-        include: { worker: true, authUser: true },
-        orderBy: { fullName: "asc" },
+        orderBy: { name: "asc" },
     });
     res.json(members);
 }
@@ -55,7 +57,7 @@ async function createTeamMember(req, res) {
         return;
     }
     const data = parsed.data;
-    const existing = await prisma_1.prisma.authUser.findFirst({
+    const existing = await prisma_1.prisma.user.findFirst({
         where: {
             OR: [
                 { username: { equals: data.username, mode: "insensitive" } },
@@ -68,48 +70,28 @@ async function createTeamMember(req, res) {
         return;
     }
     const passwordHash = await (0, hash_1.hashPassword)(data.password);
-    const result = await prisma_1.prisma.$transaction(async (tx) => {
-        const person = await tx.people.create({
-            data: {
-                fullName: data.fullName,
-                email: data.email ?? null,
-                type: "worker",
-                worker: {
-                    create: {
-                        function: data.function,
-                        role: data.role,
-                    },
-                },
-            },
-            include: { worker: true },
-        });
-        await tx.authUser.create({
-            data: {
-                username: data.username,
-                email: data.email ?? null,
-                passwordHash,
-                personId: person.id,
-            },
-        });
-        return person;
+    const user = await prisma_1.prisma.user.create({
+        data: {
+            name: data.fullName,
+            username: data.username,
+            email: data.email ?? null,
+            passwordHash,
+            role: data.role,
+            status: "active",
+        },
     });
-    const created = await prisma_1.prisma.people.findUnique({
-        where: { id: result.id },
-        include: { worker: true, authUser: true },
-    });
-    res.status(201).json(created);
+    res.status(201).json(user);
 }
 async function getTeamMemberById(req, res) {
     const { id } = req.params;
-    const person = await prisma_1.prisma.people.findUnique({
+    const user = await prisma_1.prisma.user.findUnique({
         where: { id },
-        include: { worker: true, authUser: true },
     });
-    if (!person || person.type !== "worker") {
+    if (!user) {
         res.status(404).json({ error: "Membro da equipe não encontrado" });
         return;
     }
-    res.json(person);
+    res.json(user);
 }
 async function patchTeamMember(req, res) {
     const { id } = req.params;
@@ -119,49 +101,22 @@ async function patchTeamMember(req, res) {
         return;
     }
     const data = parsed.data;
-    const existing = await prisma_1.prisma.people.findUnique({
+    const existing = await prisma_1.prisma.user.findUnique({
         where: { id },
-        include: { worker: true, authUser: true },
     });
-    if (!existing || existing.type !== "worker") {
+    if (!existing) {
         res.status(404).json({ error: "Membro da equipe não encontrado" });
         return;
     }
-    const updates = {
-        ...(data.fullName != null && { fullName: data.fullName }),
-        ...(data.email !== undefined && { email: data.email }),
-        ...(data.status != null && { status: data.status }),
-        ...(existing.worker &&
-            (data.function != null || data.role != null) && {
-            worker: {
-                update: {
-                    ...(data.function != null && { function: data.function }),
-                    ...(data.role != null && { role: data.role }),
-                },
-            },
-        }),
-    };
-    const person = await prisma_1.prisma.people.update({
+    const user = await prisma_1.prisma.user.update({
         where: { id },
-        data: updates,
-        include: { worker: true, authUser: true },
+        data: {
+            ...(data.fullName != null && { name: data.fullName }),
+            ...(data.email !== undefined && { email: data.email }),
+            ...(data.status != null && { status: data.status }),
+            ...(data.role != null && { role: data.role }),
+        },
     });
-    if (data.status === "inactive" && existing.authUser) {
-        await prisma_1.prisma.authUser.update({
-            where: { id: existing.authUser.id },
-            data: { isActive: false },
-        });
-    }
-    else if (data.status === "active" && existing.authUser) {
-        await prisma_1.prisma.authUser.update({
-            where: { id: existing.authUser.id },
-            data: { isActive: true },
-        });
-    }
-    const updated = await prisma_1.prisma.people.findUnique({
-        where: { id },
-        include: { worker: true, authUser: true },
-    });
-    res.json(updated);
+    res.json(user);
 }
 //# sourceMappingURL=team.controller.js.map

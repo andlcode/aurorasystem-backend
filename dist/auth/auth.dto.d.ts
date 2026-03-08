@@ -34,22 +34,19 @@ export declare const registerSchema: z.ZodObject<{
     username: z.ZodString;
     email: z.ZodEffects<z.ZodOptional<z.ZodString>, string | undefined, unknown>;
     password: z.ZodString;
-    function: z.ZodString;
-    role: z.ZodDefault<z.ZodEnum<["super_admin", "evangelizador", "worker"]>>;
+    role: z.ZodDefault<z.ZodEnum<["SUPER_ADMIN", "COORDENADOR", "EVANGELIZADOR"]>>;
 }, "strip", z.ZodTypeAny, {
-    function: string;
     username: string;
+    role: "SUPER_ADMIN" | "COORDENADOR" | "EVANGELIZADOR";
     password: string;
     fullName: string;
-    role: "super_admin" | "evangelizador" | "worker";
     email?: string | undefined;
 }, {
-    function: string;
     username: string;
     password: string;
     fullName: string;
     email?: unknown;
-    role?: "super_admin" | "evangelizador" | "worker" | undefined;
+    role?: "SUPER_ADMIN" | "COORDENADOR" | "EVANGELIZADOR" | undefined;
 }>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 //# sourceMappingURL=auth.dto.d.ts.map

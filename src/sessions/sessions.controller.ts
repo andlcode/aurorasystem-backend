@@ -3,6 +3,16 @@ import { prisma } from "../lib/prisma";
 import { putAttendanceSchema } from "./sessions.dto";
 import type { AttendanceStatus } from "@prisma/client";
 
+function getSessionDateBounds(sessionDate: Date) {
+  const sessionStart = new Date(sessionDate);
+  sessionStart.setUTCHours(0, 0, 0, 0);
+
+  const sessionEnd = new Date(sessionDate);
+  sessionEnd.setUTCHours(23, 59, 59, 999);
+
+  return { sessionStart, sessionEnd };
+}
+
 export async function putAttendance(req: Request, res: Response) {
   const { sessionId } = req.params;
   const parsed = putAttendanceSchema.safeParse(req.body);
@@ -24,18 +34,40 @@ export async function putAttendance(req: Request, res: Response) {
     return;
   }
 
-  const participant = await prisma.people.findUnique({
+  const participant = await prisma.participant.findUnique({
     where: { id: participantId },
   });
   if (!participant) {
     res.status(404).json({ error: "Participante não encontrado" });
     return;
   }
-  if (participant.type !== "participant") {
-    res.status(400).json({
-      error: "participantId deve ser uma pessoa do tipo participant",
+
+  const existingAttendance = await prisma.attendance.findUnique({
+    where: {
+      sessionId_participantId: { sessionId, participantId },
+    },
+    select: { id: true },
+  });
+
+  if (!existingAttendance) {
+    const { sessionStart, sessionEnd } = getSessionDateBounds(session.sessionDate);
+    const historicalMembership = await prisma.classParticipant.findFirst({
+      where: {
+        classId: session.classId,
+        participantId,
+        startDate: { lte: sessionEnd },
+        OR: [{ endDate: null }, { endDate: { gte: sessionStart } }],
+        status: "active",
+      },
+      select: { id: true },
     });
-    return;
+
+    if (!historicalMembership) {
+      res.status(400).json({
+        error: "Participante não fazia parte da turma na data desta sessão",
+      });
+      return;
+    }
   }
 
   const attendance = await prisma.attendance.upsert({
@@ -78,7 +110,7 @@ export async function listAttendance(req: Request, res: Response) {
   const attendances = await prisma.attendance.findMany({
     where: { sessionId },
     include: { participant: true, recorder: true },
-    orderBy: { participant: { fullName: "asc" } },
+    orderBy: { participant: { name: "asc" } },
   });
 
   const total = attendances.length;

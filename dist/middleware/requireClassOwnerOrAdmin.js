@@ -3,8 +3,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.requireClassOwnerOrAdmin = requireClassOwnerOrAdmin;
 const prisma_1 = require("../lib/prisma");
 /**
- * Middleware que exige evangelizador/super_admin OU ser o responsável (moderador) da turma.
- * Deve ser usado após authJwt. Usa req.user. O :id deve ser o classId.
+ * Permite acesso total apenas a SUPER_ADMIN.
+ * Demais usuários (COORDENADOR, EVANGELIZADOR) só acessam turmas
+ * em que são o responsável (responsibleUserId === user.userId).
  */
 async function requireClassOwnerOrAdmin(req, res, next) {
     const user = req.user;
@@ -13,7 +14,7 @@ async function requireClassOwnerOrAdmin(req, res, next) {
         return;
     }
     const classId = req.params.id;
-    if (user.role === "evangelizador" || user.role === "super_admin") {
+    if (user.role === "SUPER_ADMIN") {
         next();
         return;
     }
@@ -25,8 +26,8 @@ async function requireClassOwnerOrAdmin(req, res, next) {
         res.status(404).json({ error: "Turma não encontrada" });
         return;
     }
-    if (class_.responsibleUserId !== user.personId) {
-        res.status(403).json({ error: "Sem permissão para editar esta turma" });
+    if (class_.responsibleUserId !== user.userId) {
+        res.status(403).json({ error: "Sem permissão para acessar esta turma" });
         return;
     }
     next();

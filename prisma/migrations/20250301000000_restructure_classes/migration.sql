@@ -10,7 +10,7 @@ CREATE TABLE "ClassParticipant" (
 
 -- Migrate data from ClassMembership to ClassParticipant (only participants)
 INSERT INTO "ClassParticipant" ("id", "classId", "participantId", "createdAt")
-SELECT gen_random_uuid()::text, "classId", "personId", "createdAt"
+SELECT gen_random_uuid()::text, cm."classId", cm."personId", cm."createdAt"
 FROM "ClassMembership" cm
 JOIN "People" p ON p."id" = cm."personId"
 WHERE p."type" = 'participant' AND cm."active" = true;

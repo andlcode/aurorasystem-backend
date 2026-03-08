@@ -49,15 +49,12 @@ export async function listClasses(req: Request, res: Response) {
       userId: req.userId,
     });
 
-    const role = req.userRole;
-    const personId = req.userId;
-
-    if (!role || !personId) {
+    if (!req.userId) {
       res.status(401).json({ error: "Autenticação necessária" });
       return;
     }
 
-    const classes = await classesService.listClasses(role, personId);
+    const classes = await classesService.listClasses(req.userRole! as import("@prisma/client").UserRole, req.userId!);
     console.log("[Classes] GET /classes retorno:", classes);
     res.json(classes);
   } catch (err) {
@@ -66,17 +63,38 @@ export async function listClasses(req: Request, res: Response) {
   }
 }
 
+export async function getTodayClass(req: Request, res: Response) {
+  try {
+    const personId = req.userId;
+
+    if (!personId) {
+      res.status(401).json({ error: "Autenticação necessária" });
+      return;
+    }
+
+    const class_ = await classesService.getTodayClassForResponsible(personId);
+    res.json(class_ ?? null);
+  } catch (err) {
+    console.error("[Classes] Erro ao buscar turma de hoje:", err);
+    res.status(500).json({ error: "Não foi possível verificar a turma de hoje." });
+  }
+}
+
 export async function getClassById(req: Request, res: Response) {
   const { id: classId } = req.params;
   const role = req.userRole!;
   const personId = req.userId!;
 
-  const class_ = await classesService.getClassById(classId, role, personId);
-  if (!class_) {
+  const result = await classesService.getClassById(classId, role, personId);
+  if (result.status === "not_found") {
     res.status(404).json({ error: "Turma não encontrada" });
     return;
   }
-  res.json(class_);
+  if (result.status === "forbidden") {
+    res.status(403).json({ error: "Sem permissão para acessar esta turma" });
+    return;
+  }
+  res.json(result.class);
 }
 
 export async function patchClass(req: Request, res: Response) {
@@ -141,6 +159,7 @@ export async function listParticipants(req: Request, res: Response) {
   const { id: classId } = req.params;
 
   try {
+    console.log("[Classes] GET /classes/:id/participants", { classId });
     const participants = await classesService.listParticipants(classId);
     res.json(participants);
   } catch {
@@ -159,6 +178,7 @@ export async function openSession(req: Request, res: Response) {
   const dateString = parsed.data.date ?? getLocalDateStringAmericaBahia();
 
   try {
+    console.log("[Classes] POST /classes/:id/sessions/open", { classId, dateString });
     const session = await classesService.openSession(
       classId,
       dateString,
@@ -199,6 +219,7 @@ export async function createOrGetSession(req: Request, res: Response) {
   const dateString = parsed.data.date;
 
   try {
+    console.log("[Classes] POST /classes/:id/sessions", { classId, dateString });
     const session = await classesService.openSession(
       classId,
       dateString,

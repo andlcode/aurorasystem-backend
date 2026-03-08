@@ -1,6 +1,10 @@
 import { z } from "zod";
+import {
+  EVANGELIZADOR_ROLE,
+  WORKER_ROLE_VALUES,
+} from "../constants/roles";
 
-const workerRoleSchema = z.enum(["evangelizador", "worker"]);
+const workerRoleSchema = z.enum(WORKER_ROLE_VALUES);
 const personStatusSchema = z.enum(["active", "inactive"]);
 
 const passwordStrength = z
@@ -14,8 +18,7 @@ export const createTeamMemberSchema = z.object({
   email: z.preprocess((v) => (v === "" ? undefined : v), z.string().email().optional()),
   username: z.string().min(1, "Username é obrigatório"),
   password: passwordStrength,
-  function: z.string().min(1, "Função é obrigatória"),
-  role: workerRoleSchema.default("worker"),
+  role: workerRoleSchema.default(EVANGELIZADOR_ROLE),
 });
 
 export type CreateTeamMemberInput = z.infer<typeof createTeamMemberSchema>;
@@ -26,17 +29,13 @@ export const listTeamQuerySchema = z.object({
 
 export type ListTeamQuery = z.infer<typeof listTeamQuerySchema>;
 
-const patchRoleSchema = z.enum(["super_admin", "evangelizador", "worker"]);
+const patchRoleSchema = z.enum(WORKER_ROLE_VALUES);
 
 export const patchTeamMemberSchema = z.object({
   fullName: z.string().min(1).optional(),
   email: z.preprocess((v) => (v === "" ? null : v), z.string().email().optional().nullable()),
   status: personStatusSchema.optional(),
-  function: z.string().min(1).optional(),
   role: patchRoleSchema.optional(),
-}).refine(
-  (data) => data.role !== "super_admin",
-  { message: "Não é possível alterar role para super_admin via edição", path: ["role"] }
-);
+});
 
 export type PatchTeamMemberInput = z.infer<typeof patchTeamMemberSchema>;

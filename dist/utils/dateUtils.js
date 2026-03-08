@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getLocalDateStringAmericaBahia = getLocalDateStringAmericaBahia;
 exports.normalizeDateOnly = normalizeDateOnly;
 exports.getCurrentMonthRangeBahia = getCurrentMonthRangeBahia;
+exports.getCurrentWeekdayBahia = getCurrentWeekdayBahia;
 const luxon_1 = require("luxon");
 const TZ_BAHIA = "America/Bahia";
 /**
@@ -49,5 +50,9 @@ function getCurrentMonthRangeBahia() {
     const start = now.startOf("month").toUTC().toJSDate();
     const end = now.endOf("month").toUTC().toJSDate();
     return { start, end };
+}
+function getCurrentWeekdayBahia() {
+    const weekday = luxon_1.DateTime.now().setZone(TZ_BAHIA).weekday;
+    return weekday % 7;
 }
 //# sourceMappingURL=dateUtils.js.map

@@ -41,7 +41,7 @@ const requireRole_1 = require("../middleware/requireRole");
 const teamController = __importStar(require("./team.controller"));
 const router = (0, express_1.Router)();
 router.use(authJwt_1.authJwt);
-router.use((0, requireRole_1.requireRole)("super_admin"));
+router.use((0, requireRole_1.requireRole)("SUPER_ADMIN"));
 router.get("/", (0, asyncHandler_1.asyncHandler)(teamController.listTeam));
 router.get("/responsibles", (0, asyncHandler_1.asyncHandler)(teamController.listTeamResponsibles));
 router.post("/", (0, asyncHandler_1.asyncHandler)(teamController.createTeamMember));

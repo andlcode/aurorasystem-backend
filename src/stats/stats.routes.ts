@@ -17,13 +17,13 @@ router.get(
 
 router.get(
   "/overview",
-  requireRole("evangelizador", "super_admin"),
+  requireRole("SUPER_ADMIN", "COORDENADOR"),
   asyncHandler(statsController.getOverview)
 );
 
 router.get(
   "/classes",
-  requireRole("evangelizador", "super_admin"),
+  requireRole("SUPER_ADMIN", "COORDENADOR"),
   asyncHandler(statsController.getClassesStats)
 );
 

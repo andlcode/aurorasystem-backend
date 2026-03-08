@@ -6,7 +6,7 @@ import * as teamController from "./team.controller";
 
 const router = Router();
 router.use(authJwt);
-router.use(requireRole("super_admin"));
+router.use(requireRole("SUPER_ADMIN"));
 
 router.get("/", asyncHandler(teamController.listTeam));
 router.get("/responsibles", asyncHandler(teamController.listTeamResponsibles));

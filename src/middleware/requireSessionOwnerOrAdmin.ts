@@ -2,8 +2,8 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 
 /**
- * Middleware que exige evangelizador/super_admin OU ser o responsável da turma da sessão.
- * Deve ser usado após authJwt. Usa req.user. O :sessionId deve ser o sessionId.
+ * Permite acesso total apenas a SUPER_ADMIN.
+ * Demais usuários só acessam sessões de turmas em que são o responsável.
  */
 export async function requireSessionOwnerOrAdmin(
   req: Request,
@@ -17,7 +17,7 @@ export async function requireSessionOwnerOrAdmin(
   }
   const sessionId = req.params.sessionId;
 
-  if (user.role === "evangelizador" || user.role === "super_admin") {
+  if (user.role === "SUPER_ADMIN") {
     next();
     return;
   }
@@ -32,8 +32,8 @@ export async function requireSessionOwnerOrAdmin(
     return;
   }
 
-  if (session.class_.responsibleUserId !== user.personId) {
-    res.status(403).json({ error: "Sem permissão para esta sessão" });
+  if (session.class_.responsibleUserId !== user.userId) {
+    res.status(403).json({ error: "Sem permissão para acessar esta sessão" });
     return;
   }
 

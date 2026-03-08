@@ -1,59 +1,131 @@
 import { prisma } from "../lib/prisma.js";
-import { normalizeDateOnly } from "../utils/dateUtils.js";
+import { UserRole } from "@prisma/client";
+import { getCurrentWeekdayBahia, normalizeDateOnly } from "../utils/dateUtils.js";
 import type { CreateClassInput, PatchClassInput, AddParticipantInput } from "./classes.dto.js";
-import type { WorkerRole } from "@prisma/client";
+
+const ALLOWED_RESPONSIBLE_ROLES = new Set<UserRole>([
+  "SUPER_ADMIN",
+  "COORDENADOR",
+  "EVANGELIZADOR",
+]);
 
 const classInclude = {
-  responsible: { include: { worker: true } },
-  participants: { include: { participant: true } },
-};
-
-export async function listResponsibles() {
-  const responsibles = await prisma.people.findMany({
+  responsible: true,
+  participants: {
     where: {
-      type: "worker",
-      status: "active",
-      authUser: {
-        is: {
-          isActive: true,
-        },
-      },
-      worker: {
-        role: { in: ["evangelizador", "super_admin", "worker"] as WorkerRole[] },
+      status: "active" as const,
+      participant: {
+        status: "active" as const,
       },
     },
-    include: { worker: true, authUser: true },
-    orderBy: { fullName: "asc" },
+    include: { participant: true },
+  },
+};
+
+function getSessionDateBounds(sessionDate: Date) {
+  const sessionStart = new Date(sessionDate);
+  sessionStart.setUTCHours(0, 0, 0, 0);
+
+  const sessionEnd = new Date(sessionDate);
+  sessionEnd.setUTCHours(23, 59, 59, 999);
+
+  return { sessionStart, sessionEnd };
+}
+
+async function getActiveClassMemberships(classId: string) {
+  return prisma.classParticipant.findMany({
+    where: {
+      classId,
+      status: "active",
+      participant: {
+        status: "active",
+      },
+    },
+    include: { participant: true },
+    orderBy: { participant: { name: "asc" } },
+  });
+}
+
+async function getSessionMembers(classId: string, sessionDate: Date, attendanceParticipantIds: string[] = []) {
+  const { sessionStart, sessionEnd } = getSessionDateBounds(sessionDate);
+
+  const memberships = await prisma.classParticipant.findMany({
+    where: {
+      classId,
+      startDate: { lte: sessionEnd },
+      OR: [{ endDate: null }, { endDate: { gte: sessionStart } }],
+      status: "active",
+    },
+    include: { participant: true },
+    orderBy: [{ participant: { name: "asc" } }, { startDate: "asc" }],
+  });
+
+  const membersById = new Map(
+    memberships.map((membership) => [
+      membership.participantId,
+      {
+        ...membership.participant,
+        createdAt: membership.startDate,
+      },
+    ])
+  );
+
+  const missingAttendanceParticipantIds = attendanceParticipantIds.filter(
+    (participantId) => !membersById.has(participantId)
+  );
+
+  if (missingAttendanceParticipantIds.length > 0) {
+    const missingParticipants = await prisma.participant.findMany({
+      where: {
+        id: { in: missingAttendanceParticipantIds },
+      },
+      orderBy: { name: "asc" },
+    });
+
+    for (const participant of missingParticipants) {
+      membersById.set(participant.id, participant);
+    }
+  }
+
+  return Array.from(membersById.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function listResponsibles() {
+  const responsibles = await prisma.user.findMany({
+    where: {
+      status: "active",
+      role: { in: ["SUPER_ADMIN", "COORDENADOR", "EVANGELIZADOR"] },
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+    },
+    orderBy: { name: "asc" },
   });
 
   console.log("[Classes] Responsáveis elegíveis encontrados:", responsibles.length);
 
-  return responsibles.map((p) => ({
-    id: p.id,
-    name: p.fullName,
-    fullName: p.fullName,
-    email: p.email ?? p.authUser?.email ?? null,
-    role: p.worker?.role,
+  return responsibles.map((u) => ({
+    id: u.id,
+    name: u.name,
+    fullName: u.name,
+    email: u.email,
+    role: u.role,
   }));
 }
 
-export async function createClass(data: CreateClassInput, createdByPersonId: string | null) {
-  console.log("[Classes] Payload recebido para criar turma:", {
-    ...data,
-    createdByPersonId,
-  });
-
-  const responsible = await prisma.people.findUnique({
+export async function createClass(data: CreateClassInput, createdByUserId: string | null) {
+  const responsible = await prisma.user.findUnique({
     where: { id: data.responsibleUserId },
-    include: { worker: true },
   });
 
-  if (!responsible?.worker) {
-    throw new Error("O responsável deve ser um evangelizador, super_admin ou moderador.");
+  if (!responsible) {
+    throw new Error("Responsável não encontrado.");
   }
-
-  if (!["evangelizador", "super_admin", "worker"].includes(responsible.worker.role)) {
-    throw new Error("O responsável deve ser um evangelizador, super_admin ou moderador.");
+  if (!ALLOWED_RESPONSIBLE_ROLES.has(responsible.role)) {
+    throw new Error("O responsável deve ser um super admin, coordenador ou evangelizador.");
   }
 
   return prisma.class.create({
@@ -67,8 +139,11 @@ export async function createClass(data: CreateClassInput, createdByPersonId: str
   });
 }
 
-export async function listClasses(role: WorkerRole, personId: string) {
-  const where = role === "super_admin" ? {} : { responsibleUserId: personId };
+export async function listClasses(role: UserRole, userId: string) {
+  const where =
+    role === "SUPER_ADMIN"
+      ? {}
+      : { responsibleUserId: userId };
 
   const classes = await prisma.class.findMany({
     where,
@@ -77,49 +152,63 @@ export async function listClasses(role: WorkerRole, personId: string) {
   });
 
   console.log("[Classes] Listagem executada:", {
-    role,
-    personId,
     total: classes.length,
+    role,
+    filteredByOwner: role !== "SUPER_ADMIN",
   });
 
   return classes;
 }
 
-export async function getClassById(classId: string, role: WorkerRole, personId: string) {
+export async function getTodayClassForResponsible(userId: string) {
+  const weekday = getCurrentWeekdayBahia();
+
+  return prisma.class.findFirst({
+    where: {
+      day: weekday,
+      responsibleUserId: userId,
+    },
+    select: {
+      id: true,
+      name: true,
+      day: true,
+      time: true,
+      responsibleUserId: true,
+    },
+    orderBy: [{ time: "asc" }, { name: "asc" }],
+  });
+}
+
+export async function getClassById(classId: string, role: UserRole, userId: string) {
   const class_ = await prisma.class.findUnique({
     where: { id: classId },
     include: classInclude,
   });
 
-  if (!class_) return null;
+  if (!class_) return { status: "not_found" as const };
 
-  if (role !== "super_admin" && class_.responsibleUserId !== personId) {
-    return null;
+  if (role !== "SUPER_ADMIN" && class_.responsibleUserId !== userId) {
+    return { status: "forbidden" as const };
   }
 
-  return class_;
+  return { status: "ok" as const, class: class_ };
 }
 
 export async function patchClass(
   classId: string,
   data: PatchClassInput,
-  role: WorkerRole,
-  personId: string
+  role: UserRole,
+  userId: string
 ) {
   const existing = await prisma.class.findUnique({ where: { id: classId } });
   if (!existing) return null;
 
-  if (role !== "evangelizador" && role !== "super_admin") {
-    throw new Error("Sem permissão para editar esta turma");
-  }
-
   if (data.responsibleUserId != null) {
-    const responsible = await prisma.people.findUnique({
+    const responsible = await prisma.user.findUnique({
       where: { id: data.responsibleUserId },
-      include: { worker: true },
     });
-    if (!responsible?.worker || !["evangelizador", "super_admin", "worker"].includes(responsible.worker.role)) {
-      throw new Error("O responsável deve ser um evangelizador, super_admin ou moderador.");
+    if (!responsible || !ALLOWED_RESPONSIBLE_ROLES.has(responsible.role)) {
+      throw new Error("O responsável deve ser um super admin, coordenador ou evangelizador.");
     }
   }
 
@@ -135,62 +224,101 @@ export async function patchClass(
   });
 }
 
-export async function addParticipant(classId: string, data: AddParticipantInput) {
+export async function addParticipant(
+  classId: string,
+  data: AddParticipantInput,
+  options?: { closeExistingMemberships?: boolean }
+) {
   const class_ = await prisma.class.findUnique({ where: { id: classId } });
   if (!class_) throw new Error("Turma não encontrada");
 
-  const participant = await prisma.people.findUnique({
+  const participant = await prisma.participant.findUnique({
     where: { id: data.participantId },
   });
   if (!participant) throw new Error("Participante não encontrado");
-  if (participant.type !== "participant") {
-    throw new Error("A pessoa deve ser do tipo participant");
+  if (participant.status !== "active") {
+    throw new Error("Participante inativo não pode ser vinculado a uma nova turma");
   }
 
-  const existing = await prisma.classParticipant.findUnique({
+  const existingActiveMembership = await prisma.classParticipant.findFirst({
     where: {
-      classId_participantId: { classId, participantId: data.participantId },
+      classId,
+      participantId: data.participantId,
+      status: "active",
     },
   });
 
-  if (existing) {
+  if (existingActiveMembership) {
     throw new Error("Participante já vinculado a esta turma");
   }
 
-  const participantClasses = await prisma.classParticipant.findMany({
-    where: { participantId: data.participantId },
-    include: { class_: { select: { day: true, time: true } } },
-  });
+  const closeExistingMemberships = options?.closeExistingMemberships ?? false;
 
-  const hasConflict = participantClasses.some(
-    (cp) => cp.class_.day === class_.day && cp.class_.time === class_.time
-  );
+  if (!closeExistingMemberships) {
+    const participantClasses = await prisma.classParticipant.findMany({
+      where: {
+        participantId: data.participantId,
+        status: "active",
+        classId: { not: classId },
+      },
+      include: { class_: { select: { day: true, time: true } } },
+    });
 
-  if (hasConflict) {
-    throw new Error("Este participante já está vinculado a outra turma no mesmo dia e horário");
+    const hasConflict = participantClasses.some(
+      (cp) => cp.class_.day === class_.day && cp.class_.time === class_.time
+    );
+
+    if (hasConflict) {
+      throw new Error("O participante já está vinculado a outra turma no mesmo dia e horário.");
+    }
   }
 
-  return prisma.classParticipant.create({
-    data: {
-      classId,
-      participantId: data.participantId,
-    },
-    include: { participant: true },
+  return prisma.$transaction(async (tx) => {
+    if (closeExistingMemberships) {
+      await tx.classParticipant.updateMany({
+        where: {
+          participantId: data.participantId,
+          status: "active",
+          classId: { not: classId },
+        },
+        data: {
+          status: "inactive",
+          endDate: new Date(),
+        },
+      });
+    }
+
+    return tx.classParticipant.create({
+      data: {
+        classId,
+        participantId: data.participantId,
+        status: "active",
+      },
+      include: { participant: true },
+    });
   });
 }
 
 export async function removeParticipant(classId: string, participantId: string) {
-  const cp = await prisma.classParticipant.findUnique({
+  const activeMembership = await prisma.classParticipant.findFirst({
     where: {
-      classId_participantId: { classId, participantId },
+      classId,
+      participantId,
+      status: "active",
     },
   });
 
-  if (!cp) throw new Error("Participante não encontrado nesta turma");
+  if (!activeMembership) throw new Error("Participante não encontrado nesta turma");
 
-  await prisma.classParticipant.delete({
+  await prisma.classParticipant.updateMany({
     where: {
-      classId_participantId: { classId, participantId },
+      classId,
+      participantId,
+      status: "active",
+    },
+    data: {
+      status: "inactive",
+      endDate: new Date(),
     },
   });
 }
@@ -199,19 +327,15 @@ export async function listParticipants(classId: string) {
   const class_ = await prisma.class.findUnique({ where: { id: classId } });
   if (!class_) throw new Error("Turma não encontrada");
 
-  const participants = await prisma.classParticipant.findMany({
-    where: { classId },
-    include: { participant: true },
-    orderBy: { participant: { fullName: "asc" } },
-  });
+  const participants = await getActiveClassMemberships(classId);
 
   return participants.map((cp) => ({
     ...cp.participant,
-    createdAt: cp.createdAt,
+    createdAt: cp.startDate,
   }));
 }
 
-export async function openSession(classId: string, dateString: string, createdByPersonId: string) {
+export async function openSession(classId: string, dateString: string, createdByUserId: string) {
   const sessionDate = normalizeDateOnly(dateString);
 
   const class_ = await prisma.class.findUnique({ where: { id: classId } });
@@ -224,21 +348,17 @@ export async function openSession(classId: string, dateString: string, createdBy
     create: {
       classId,
       sessionDate,
-      createdBy: createdByPersonId,
+      createdBy: createdByUserId,
     },
     update: {},
     include: { class_: true },
   });
 
-  const participants = await prisma.classParticipant.findMany({
-    where: { classId },
-    include: { participant: true },
-    orderBy: { participant: { fullName: "asc" } },
-  });
+  const participants = await getActiveClassMemberships(classId);
 
   const members = participants.map((cp) => ({
     ...cp.participant,
-    createdAt: cp.createdAt,
+    createdAt: cp.startDate,
   }));
 
   return { ...session, members };
@@ -253,83 +373,75 @@ export async function listSessions(classId: string, month?: string) {
   };
 
   if (month) {
-    const [year, monthNum] = month.split("-").map(Number);
-    const startDate = new Date(Date.UTC(year, monthNum - 1, 1));
-    const endDate = new Date(Date.UTC(year, monthNum, 0, 23, 59, 59, 999));
-    where.sessionDate = { gte: startDate, lte: endDate };
+    const [y, m] = month.split("-").map(Number);
+    const start = new Date(Date.UTC(y, m - 1, 1));
+    const end = new Date(Date.UTC(y, m, 0));
+    where.sessionDate = { gte: start, lte: end };
   }
 
   const sessions = await prisma.classSession.findMany({
     where,
-    include: {
-      class_: true,
-      attendances: true,
-    },
     orderBy: { sessionDate: "desc" },
+    include: {
+      attendances: {
+        include: { participant: true },
+        orderBy: { participant: { name: "asc" } },
+      },
+    },
   });
 
-  return sessions.map((s) => {
-    const d = s.sessionDate;
-    const day = d.getUTCDate();
-    const monthVal = d.getUTCMonth() + 1;
-    const yearVal = d.getUTCFullYear();
-    const weekOfMonth = Math.floor((day - 1) / 7) + 1;
-    const present = s.attendances.filter((a) => a.status === "present").length;
-    const absent = s.attendances.filter((a) => a.status === "absent").length;
-    const justified = s.attendances.filter((a) => a.status === "justified").length;
-    return {
-      ...s,
-      month: monthVal,
-      year: yearVal,
-      weekOfMonth,
-      present,
-      absent,
-      justified,
-      participantCount: s.attendances.length,
-    };
-  });
+  const sessionDate = month ? undefined : new Date();
+  const membersPromise = sessionDate
+    ? getSessionMembers(classId, sessionDate)
+    : Promise.resolve([]);
+
+  const [members] = await Promise.all([membersPromise]);
+
+  return sessions.map((s) => ({
+    ...s,
+    members: s.attendances.map((a) => ({
+      ...a.participant,
+      attendance: a,
+    })),
+  }));
 }
 
 export async function getSessionById(classId: string, sessionId: string) {
-  const session = await prisma.classSession.findUnique({
-    where: { id: sessionId },
+  const session = await prisma.classSession.findFirst({
+    where: { id: sessionId, classId },
     include: {
-      class_: { include: classInclude },
-      attendances: { include: { participant: true } },
+      class_: true,
+      attendances: {
+        include: { participant: true },
+        orderBy: { participant: { name: "asc" } },
+      },
     },
   });
 
-  if (!session || session.classId !== classId) return null;
+  if (!session) return null;
 
-  const participants = await prisma.classParticipant.findMany({
-    where: { classId },
-    include: { participant: true },
-    orderBy: { participant: { fullName: "asc" } },
-  });
-
-  const members = participants.map((cp) => ({
-    ...cp.participant,
-    createdAt: cp.createdAt,
-  }));
-
-  const attendanceMap = new Map(
-    session.attendances.map((a) => [a.participantId, a])
+  const members = await getSessionMembers(
+    classId,
+    session.sessionDate,
+    session.attendances.map((a) => a.participantId)
   );
+
+  const items = session.attendances.map((a) => ({
+    participantId: a.participantId,
+    status: a.status,
+  }));
 
   return {
     ...session,
-    members,
-    attendanceMap: Object.fromEntries(attendanceMap),
-    items: session.attendances.map((a) => ({
-      id: a.id,
-      participantId: a.participantId,
-      status: a.status,
-      justificationReason: a.justificationReason,
-      participant: a.participant,
-    })),
-    present: session.attendances.filter((a) => a.status === "present").length,
-    absent: session.attendances.filter((a) => a.status === "absent").length,
-    justified: session.attendances.filter((a) => a.status === "justified").length,
+    members: members.map((m) => {
+      const att = session.attendances.find((a) => a.participantId === m.id);
+      return {
+        ...m,
+        fullName: m.name,
+        attendance: att ?? null,
+      };
+    }),
+    items,
   };
 }
 
@@ -339,76 +451,53 @@ export async function putBulkAttendance(
   records: Array<{ participantId: string; status: string; notes?: string | null }>,
   recordedBy: string
 ) {
-  const session = await prisma.classSession.findUnique({
-    where: { id: sessionId },
+  const session = await prisma.classSession.findFirst({
+    where: { id: sessionId, classId },
     include: { class_: true },
   });
+  if (!session) throw new Error("Sessão não encontrada");
 
-  if (!session || session.classId !== classId) {
-    throw new Error("Sessão não encontrada ou não pertence a esta turma");
-  }
+  const sessionMembers = await getSessionMembers(
+    classId,
+    session.sessionDate,
+    records.map((r) => r.participantId)
+  );
 
-  const participantIds = await prisma.classParticipant.findMany({
-    where: { classId },
-    select: { participantId: true },
-  });
-  const allowedIds = new Set(participantIds.map((p) => p.participantId));
-
-  const statusMap: Record<string, "present" | "absent" | "justified"> = {
-    presente: "present",
-    ausente: "absent",
-    justificado: "justified",
-  };
+  const allowedIds = new Set(sessionMembers.map((p) => p.id));
 
   for (const rec of records) {
     if (!allowedIds.has(rec.participantId)) {
-      throw new Error(
-        `Participante ${rec.participantId} não está vinculado a esta turma`
-      );
+      throw new Error(`Participante ${rec.participantId} não está vinculado a esta turma`);
     }
-    const dbStatus = statusMap[rec.status];
-    if (!dbStatus) {
-      throw new Error(`Status inválido: ${rec.status}. Use presente, ausente ou justificado.`);
-    }
-
-    await prisma.attendance.upsert({
-      where: {
-        sessionId_participantId: { sessionId, participantId: rec.participantId },
-      },
-      create: {
-        sessionId,
-        participantId: rec.participantId,
-        status: dbStatus,
-        justificationReason:
-          dbStatus === "justified" ? (rec.notes ?? null) : null,
-        recordedBy,
-      },
-      update: {
-        status: dbStatus,
-        justificationReason:
-          dbStatus === "justified" ? (rec.notes ?? null) : null,
-        recordedBy,
-      },
-    });
   }
+
+  await prisma.$transaction(
+    records.map((rec) =>
+      prisma.attendance.upsert({
+        where: {
+          sessionId_participantId: { sessionId, participantId: rec.participantId },
+        },
+        create: {
+          sessionId,
+          participantId: rec.participantId,
+          status: rec.status as "present" | "absent" | "justified",
+          justificationReason: rec.notes ?? null,
+          recordedBy,
+        },
+        update: {
+          status: rec.status as "present" | "absent" | "justified",
+          justificationReason: rec.notes ?? null,
+          recordedBy,
+        },
+      })
+    )
+  );
 
   const attendances = await prisma.attendance.findMany({
     where: { sessionId },
     include: { participant: true },
-    orderBy: { participant: { fullName: "asc" } },
+    orderBy: { participant: { name: "asc" } },
   });
 
-  return {
-    items: attendances.map((a) => ({
-      id: a.id,
-      participantId: a.participantId,
-      status: a.status,
-      justificationReason: a.justificationReason,
-      participant: a.participant,
-    })),
-    total: attendances.length,
-    present: attendances.filter((a) => a.status === "present").length,
-    absent: attendances.filter((a) => a.status === "absent").length,
-    justified: attendances.filter((a) => a.status === "justified").length,
-  };
+  return attendances;
 }

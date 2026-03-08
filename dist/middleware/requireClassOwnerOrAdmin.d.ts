@@ -1,7 +1,8 @@
 import type { Request, Response, NextFunction } from "express";
 /**
- * Middleware que exige evangelizador/super_admin OU ser o responsável (moderador) da turma.
- * Deve ser usado após authJwt. Usa req.user. O :id deve ser o classId.
+ * Permite acesso total apenas a SUPER_ADMIN.
+ * Demais usuários (COORDENADOR, EVANGELIZADOR) só acessam turmas
+ * em que são o responsável (responsibleUserId === user.userId).
  */
 export declare function requireClassOwnerOrAdmin(req: Request, res: Response, next: NextFunction): Promise<void>;
 //# sourceMappingURL=requireClassOwnerOrAdmin.d.ts.map

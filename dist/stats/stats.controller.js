@@ -83,11 +83,11 @@ async function getOverview(req, res) {
     const { start, end } = (0, dateUtils_1.getCurrentMonthRangeBahia)();
     const [totalTurmasAtivas, totalParticipantesAtivos, totalTrabalhadoresAtivos, sessoesNoMesAtual, attendances,] = await Promise.all([
         prisma_1.prisma.class.count(),
-        prisma_1.prisma.people.count({
-            where: { type: "participant", status: "active" },
+        prisma_1.prisma.participant.count({
+            where: { status: "active" },
         }),
-        prisma_1.prisma.people.count({
-            where: { type: "worker", status: "active" },
+        prisma_1.prisma.user.count({
+            where: { status: "active" },
         }),
         prisma_1.prisma.classSession.count({
             where: {
@@ -124,9 +124,9 @@ async function getDashboard(req, res) {
         return;
     }
     const role = req.user?.role ?? req.userRole;
-    const personId = req.user?.personId ?? req.userId;
-    const canViewAll = role === "super_admin" || role === "evangelizador";
-    const classWhere = canViewAll ? {} : { responsibleUserId: personId };
+    const userId = req.user?.userId ?? req.userId;
+    const canViewAll = role === "SUPER_ADMIN" || role === "COORDENADOR";
+    const classWhere = canViewAll ? {} : { responsibleUserId: userId };
     const filters = parsed.data;
     const filterStart = filters.from ? toUtcDateStart(filters.from) : undefined;
     const filterEnd = filters.to ? toUtcDateEnd(filters.to) : undefined;
@@ -146,11 +146,8 @@ async function getDashboard(req, res) {
         ? accessibleClasses.filter((item) => item.id === filters.classId)
         : accessibleClasses;
     const classIds = filteredClasses.map((item) => item.id);
-    const activeTeamMembersPromise = prisma_1.prisma.people.count({
-        where: {
-            type: "worker",
-            status: "active",
-        },
+    const activeTeamMembersPromise = prisma_1.prisma.user.count({
+        where: { status: "active" },
     });
     if (filteredClasses.length === 0) {
         const totalTeamMembers = await activeTeamMembersPromise;
@@ -167,6 +164,8 @@ async function getDashboard(req, res) {
             },
             attendanceByClass: [],
             attendanceByMonth: monthSeries,
+            attendanceByParticipant: [],
+            consecutiveAbsences: [],
             attendanceByDay: DAY_LABELS.map((label, day) => ({
                 day,
                 label,
@@ -206,7 +205,6 @@ async function getDashboard(req, res) {
             classId: { in: classIds },
             ...(dateWhere && { sessionDate: dateWhere }),
         },
-        participant: { type: "participant" },
         ...(filters.status !== "all" && { status: filters.status }),
     };
     const sessionWhere = {
@@ -217,10 +215,8 @@ async function getDashboard(req, res) {
         prisma_1.prisma.classParticipant.findMany({
             where: {
                 classId: { in: classIds },
-                participant: {
-                    type: "participant",
-                    status: "active",
-                },
+                status: "active",
+                participant: { status: "active" },
             },
             distinct: ["participantId"],
             select: { participantId: true },
@@ -238,7 +234,7 @@ async function getDashboard(req, res) {
                 participantId: true,
                 participant: {
                     select: {
-                        fullName: true,
+                        name: true,
                         email: true,
                         createdAt: true,
                     },
@@ -280,16 +276,14 @@ async function getDashboard(req, res) {
         prisma_1.prisma.classParticipant.findMany({
             where: {
                 classId: { in: classIds },
-                participant: {
-                    type: "participant",
-                    status: "active",
-                },
+                status: "active",
+                participant: { status: "active" },
             },
             include: {
                 participant: {
                     select: {
                         id: true,
-                        fullName: true,
+                        name: true,
                         email: true,
                         createdAt: true,
                     },
@@ -310,15 +304,18 @@ async function getDashboard(req, res) {
         item.id,
         { className: item.name, present: 0, total: 0, sessionDates: new Set() },
     ]));
+    const participantAttendanceMap = new Map();
     const absenceMap = new Map();
     const statusCounter = {
         present: 0,
         absent: 0,
         justified: 0,
     };
+    const attendancesByParticipant = new Map();
     let totalAttendances = 0;
     let totalPresent = 0;
     for (const attendance of attendances) {
+        const attendanceDate = toDateOnly(attendance.session.sessionDate);
         totalAttendances++;
         statusCounter[attendance.status]++;
         if (attendance.status === "present") {
@@ -327,12 +324,36 @@ async function getDashboard(req, res) {
         const classStats = classAttendanceMap.get(attendance.session.classId);
         if (classStats) {
             classStats.total++;
-            classStats.sessionDates.add(toDateOnly(attendance.session.sessionDate));
+            classStats.sessionDates.add(attendanceDate);
             if (attendance.status === "present") {
                 classStats.present++;
             }
         }
-        const monthKey = toDateOnly(attendance.session.sessionDate).slice(0, 7);
+        const participantStats = participantAttendanceMap.get(attendance.participantId) ?? {
+            participantId: attendance.participantId,
+            participantName: attendance.participant.name,
+            className: attendance.session.class_.name,
+            presentCount: 0,
+            totalAttendanceRecords: 0,
+            latestSessionDate: null,
+        };
+        participantStats.totalAttendanceRecords++;
+        if (attendance.status === "present") {
+            participantStats.presentCount++;
+        }
+        if (!participantStats.latestSessionDate || attendanceDate > participantStats.latestSessionDate) {
+            participantStats.latestSessionDate = attendanceDate;
+            participantStats.className = attendance.session.class_.name;
+        }
+        participantAttendanceMap.set(attendance.participantId, participantStats);
+        const participantRecords = attendancesByParticipant.get(attendance.participantId) ?? [];
+        participantRecords.push({
+            status: attendance.status,
+            sessionDate: attendanceDate,
+            className: attendance.session.class_.name,
+        });
+        attendancesByParticipant.set(attendance.participantId, participantRecords);
+        const monthKey = attendanceDate.slice(0, 7);
         const monthStats = monthLookup.get(monthKey);
         if (monthStats) {
             monthStats.total++;
@@ -353,7 +374,7 @@ async function getDashboard(req, res) {
         const absenceKey = `${attendance.session.classId}:${attendance.participantId}`;
         const currentAbsence = absenceMap.get(absenceKey) ?? {
             participantId: attendance.participantId,
-            participantName: attendance.participant.fullName,
+            participantName: attendance.participant.name,
             classId: attendance.session.classId,
             className: attendance.session.class_.name,
             absences: 0,
@@ -363,9 +384,8 @@ async function getDashboard(req, res) {
             currentAbsence.absences++;
         }
         if (attendance.status === "present") {
-            const date = toDateOnly(attendance.session.sessionDate);
-            if (!currentAbsence.lastPresence || date > currentAbsence.lastPresence) {
-                currentAbsence.lastPresence = date;
+            if (!currentAbsence.lastPresence || attendanceDate > currentAbsence.lastPresence) {
+                currentAbsence.lastPresence = attendanceDate;
             }
         }
         absenceMap.set(absenceKey, currentAbsence);
@@ -377,12 +397,36 @@ async function getDashboard(req, res) {
         }
         uniqueRecentStudents.set(entry.participant.id, {
             participantId: entry.participant.id,
-            participantName: entry.participant.fullName,
+            participantName: entry.participant.name,
             email: entry.participant.email,
             classId: entry.class_.id,
             className: entry.class_.name,
             joinedAt: toDateOnly(entry.createdAt),
         });
+    }
+    const consecutiveAbsenceMap = new Map();
+    for (const [participantId, records] of attendancesByParticipant.entries()) {
+        const participantStats = participantAttendanceMap.get(participantId);
+        if (!participantStats) {
+            continue;
+        }
+        records.sort((left, right) => right.sessionDate.localeCompare(left.sessionDate));
+        let consecutiveAbsences = 0;
+        for (const record of records) {
+            if (record.status !== "absent") {
+                break;
+            }
+            consecutiveAbsences++;
+        }
+        if (consecutiveAbsences > 0) {
+            consecutiveAbsenceMap.set(participantId, {
+                participantId,
+                participantName: participantStats.participantName,
+                className: records[0]?.className ?? participantStats.className,
+                consecutiveAbsences,
+                lastSessionDate: records[0]?.sessionDate ?? null,
+            });
+        }
     }
     const attendanceRate = totalAttendances > 0 ? roundPercentage((totalPresent / totalAttendances) * 100) : 0;
     const body = {
@@ -416,6 +460,32 @@ async function getDashboard(req, res) {
                     : 0,
             };
         }),
+        attendanceByParticipant: Array.from(participantAttendanceMap.values())
+            .map((item) => ({
+            participantId: item.participantId,
+            participantName: item.participantName,
+            className: item.className,
+            attendanceRate: item.totalAttendanceRecords > 0
+                ? roundPercentage((item.presentCount / item.totalAttendanceRecords) * 100)
+                : 0,
+            presentCount: item.presentCount,
+            totalAttendanceRecords: item.totalAttendanceRecords,
+        }))
+            .sort((left, right) => {
+            if (right.attendanceRate !== left.attendanceRate) {
+                return right.attendanceRate - left.attendanceRate;
+            }
+            return left.participantName.localeCompare(right.participantName, "pt-BR");
+        })
+            .slice(0, 12),
+        consecutiveAbsences: Array.from(consecutiveAbsenceMap.values())
+            .sort((left, right) => {
+            if (right.consecutiveAbsences !== left.consecutiveAbsences) {
+                return right.consecutiveAbsences - left.consecutiveAbsences;
+            }
+            return left.participantName.localeCompare(right.participantName, "pt-BR");
+        })
+            .slice(0, 10),
         attendanceByDay: Array.from(dayLookup.entries()).map(([day, stats]) => ({
             day,
             label: stats.label,
@@ -479,7 +549,15 @@ async function getClassesStats(req, res) {
     const { start, end } = (0, dateUtils_1.getCurrentMonthRangeBahia)();
     const classes = await prisma_1.prisma.class.findMany({
         include: {
-            participants: { select: { participantId: true } },
+            participants: {
+                where: {
+                    isActive: true,
+                    participant: {
+                        status: "active",
+                    },
+                },
+                select: { participantId: true },
+            },
             sessions: {
                 where: { sessionDate: { gte: start, lte: end } },
                 include: {

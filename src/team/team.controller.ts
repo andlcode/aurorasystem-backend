@@ -6,25 +6,29 @@ import {
   listTeamQuerySchema,
   patchTeamMemberSchema,
 } from "./team.dto";
-import type { WorkerRole } from "@prisma/client";
+import type { UserRole } from "@prisma/client";
 
 export async function listTeamResponsibles(req: Request, res: Response) {
-  const responsibles = await prisma.people.findMany({
+  const responsibles = await prisma.user.findMany({
     where: {
-      type: "worker",
-      worker: {
-        role: { in: ["evangelizador", "super_admin"] as WorkerRole[] },
-      },
+      status: "active",
+      role: { in: ["SUPER_ADMIN", "COORDENADOR", "EVANGELIZADOR"] },
     },
-    include: { worker: true },
-    orderBy: { fullName: "asc" },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+    },
+    orderBy: { name: "asc" },
   });
 
   res.json(
-    responsibles.map((p) => ({
-      id: p.id,
-      fullName: p.fullName,
-      role: p.worker?.role,
+    responsibles.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
     }))
   );
 }
@@ -38,19 +42,17 @@ export async function listTeam(req: Request, res: Response) {
   const { q } = parsed.data;
 
   const where = {
-    type: "worker" as const,
     ...(q?.trim() && {
       OR: [
-        { fullName: { contains: q.trim(), mode: "insensitive" as const } },
+        { name: { contains: q.trim(), mode: "insensitive" as const } },
         { email: { contains: q.trim(), mode: "insensitive" as const } },
       ],
     }),
   };
 
-  const members = await prisma.people.findMany({
+  const members = await prisma.user.findMany({
     where,
-    include: { worker: true, authUser: true },
-    orderBy: { fullName: "asc" },
+    orderBy: { name: "asc" },
   });
 
   res.json(members);
@@ -64,7 +66,7 @@ export async function createTeamMember(req: Request, res: Response) {
   }
   const data = parsed.data;
 
-  const existing = await prisma.authUser.findFirst({
+  const existing = await prisma.user.findFirst({
     where: {
       OR: [
         { username: { equals: data.username, mode: "insensitive" } },
@@ -79,56 +81,33 @@ export async function createTeamMember(req: Request, res: Response) {
 
   const passwordHash = await hashPassword(data.password);
 
-  const result = await prisma.$transaction(async (tx) => {
-    const person = await tx.people.create({
-      data: {
-        fullName: data.fullName,
-        email: data.email ?? null,
-        type: "worker",
-        worker: {
-          create: {
-            function: data.function,
-            role: data.role as WorkerRole,
-          },
-        },
-      },
-      include: { worker: true },
-    });
-
-    await tx.authUser.create({
-      data: {
-        username: data.username,
-        email: data.email ?? null,
-        passwordHash,
-        personId: person.id,
-      },
-    });
-
-    return person;
+  const user = await prisma.user.create({
+    data: {
+      name: data.fullName,
+      username: data.username,
+      email: data.email ?? null,
+      passwordHash,
+      role: data.role as UserRole,
+      status: "active",
+    },
   });
 
-  const created = await prisma.people.findUnique({
-    where: { id: result.id },
-    include: { worker: true, authUser: true },
-  });
-
-  res.status(201).json(created);
+  res.status(201).json(user);
 }
 
 export async function getTeamMemberById(req: Request, res: Response) {
   const { id } = req.params;
 
-  const person = await prisma.people.findUnique({
+  const user = await prisma.user.findUnique({
     where: { id },
-    include: { worker: true, authUser: true },
   });
 
-  if (!person || person.type !== "worker") {
+  if (!user) {
     res.status(404).json({ error: "Membro da equipe não encontrado" });
     return;
   }
 
-  res.json(person);
+  res.json(user);
 }
 
 export async function patchTeamMember(req: Request, res: Response) {
@@ -140,53 +119,24 @@ export async function patchTeamMember(req: Request, res: Response) {
   }
   const data = parsed.data;
 
-  const existing = await prisma.people.findUnique({
+  const existing = await prisma.user.findUnique({
     where: { id },
-    include: { worker: true, authUser: true },
   });
 
-  if (!existing || existing.type !== "worker") {
+  if (!existing) {
     res.status(404).json({ error: "Membro da equipe não encontrado" });
     return;
   }
 
-  const updates: Parameters<typeof prisma.people.update>[0]["data"] = {
-    ...(data.fullName != null && { fullName: data.fullName }),
-    ...(data.email !== undefined && { email: data.email }),
-    ...(data.status != null && { status: data.status as "active" | "inactive" }),
-    ...(existing.worker &&
-      (data.function != null || data.role != null) && {
-        worker: {
-          update: {
-            ...(data.function != null && { function: data.function }),
-            ...(data.role != null && { role: data.role as WorkerRole }),
-          },
-        },
-      }),
-  };
-
-  const person = await prisma.people.update({
+  const user = await prisma.user.update({
     where: { id },
-    data: updates,
-    include: { worker: true, authUser: true },
+    data: {
+      ...(data.fullName != null && { name: data.fullName }),
+      ...(data.email !== undefined && { email: data.email }),
+      ...(data.status != null && { status: data.status as "active" | "inactive" }),
+      ...(data.role != null && { role: data.role as UserRole }),
+    },
   });
 
-  if (data.status === "inactive" && existing.authUser) {
-    await prisma.authUser.update({
-      where: { id: existing.authUser.id },
-      data: { isActive: false },
-    });
-  } else if (data.status === "active" && existing.authUser) {
-    await prisma.authUser.update({
-      where: { id: existing.authUser.id },
-      data: { isActive: true },
-    });
-  }
-
-  const updated = await prisma.people.findUnique({
-    where: { id },
-    include: { worker: true, authUser: true },
-  });
-
-  res.json(updated);
+  res.json(user);
 }

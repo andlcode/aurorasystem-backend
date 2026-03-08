@@ -49,3 +49,8 @@ export function getCurrentMonthRangeBahia(): { start: Date; end: Date } {
   const end = now.endOf("month").toUTC().toJSDate();
   return { start, end };
 }
+
+export function getCurrentWeekdayBahia(): number {
+  const weekday = DateTime.now().setZone(TZ_BAHIA).weekday;
+  return weekday % 7;
+}

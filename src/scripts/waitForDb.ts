@@ -1,11 +1,18 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
+import { getDatabaseUrl } from "../config/env";
 
 const MAX_ATTEMPTS = 10;
 const DELAY_MS = 3000;
 
 async function waitForDb(): Promise<void> {
-  const prisma = new PrismaClient();
+  const prisma = new PrismaClient({
+    datasources: {
+      db: {
+        url: getDatabaseUrl(),
+      },
+    },
+  });
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {

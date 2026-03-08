@@ -7,8 +7,8 @@ exports.authJwt = authJwt;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 /**
  * Middleware que lê o token JWT do header Authorization: Bearer <token>,
- * valida com JWT_SECRET e injeta req.user = { userId, personId, role }.
- * Também define req.userId e req.userRole para compatibilidade com controllers.
+ * valida com JWT_SECRET e injeta req.user = { userId, role }.
+ * req.userId = User.id para compatibilidade com controllers.
  */
 function authJwt(req, res, next) {
     const authHeader = req.headers.authorization;
@@ -27,9 +27,8 @@ function authJwt(req, res, next) {
     }
     try {
         const decoded = jsonwebtoken_1.default.verify(token, secret);
-        console.log("[authJwt] Payload decodificado:", { userId: decoded.userId, personId: decoded.personId, role: decoded.role });
         req.user = decoded;
-        req.userId = decoded.personId;
+        req.userId = decoded.userId;
         req.userRole = decoded.role;
         next();
     }

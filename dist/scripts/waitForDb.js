@@ -2,10 +2,17 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 require("dotenv/config");
 const client_1 = require("@prisma/client");
+const env_1 = require("../config/env");
 const MAX_ATTEMPTS = 10;
 const DELAY_MS = 3000;
 async function waitForDb() {
-    const prisma = new client_1.PrismaClient();
+    const prisma = new client_1.PrismaClient({
+        datasources: {
+            db: {
+                url: (0, env_1.getDatabaseUrl)(),
+            },
+        },
+    });
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         try {
             console.log(`[waitForDb] Tentativa ${attempt}/${MAX_ATTEMPTS} - conectando ao banco...`);

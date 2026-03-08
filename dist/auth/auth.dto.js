@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.registerSchema = exports.resetPasswordSchema = exports.forgotPasswordSchema = exports.loginSchema = void 0;
 const zod_1 = require("zod");
+const roles_1 = require("../constants/roles");
 exports.loginSchema = zod_1.z.object({
     username: zod_1.z.string().min(1, "Username é obrigatório"),
     password: zod_1.z.string().min(1, "Senha é obrigatória"),
@@ -18,13 +19,12 @@ exports.resetPasswordSchema = zod_1.z.object({
     token: zod_1.z.string().min(1, "Token é obrigatório"),
     newPassword: passwordStrength,
 });
-const workerRoleSchema = zod_1.z.enum(["super_admin", "evangelizador", "worker"]);
+const workerRoleSchema = zod_1.z.enum(roles_1.WORKER_ROLE_VALUES);
 exports.registerSchema = zod_1.z.object({
     fullName: zod_1.z.string().min(1, "Nome completo é obrigatório"),
     username: zod_1.z.string().min(1, "Username é obrigatório"),
     email: zod_1.z.preprocess((v) => (v === "" ? undefined : v), zod_1.z.string().email().optional()),
     password: passwordStrength,
-    function: zod_1.z.string().min(1, "Função é obrigatória"),
-    role: workerRoleSchema.default("worker"),
+    role: workerRoleSchema.default(roles_1.EVANGELIZADOR_ROLE),
 });
 //# sourceMappingURL=auth.dto.js.map

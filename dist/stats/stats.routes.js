@@ -44,8 +44,8 @@ const statsController = __importStar(require("./stats.controller"));
 const router = (0, express_1.Router)();
 router.use(authJwt_1.authJwt);
 router.get("/dashboard", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHandler)(statsController.getDashboard));
-router.get("/overview", (0, requireRole_1.requireRole)("evangelizador", "super_admin"), (0, asyncHandler_1.asyncHandler)(statsController.getOverview));
-router.get("/classes", (0, requireRole_1.requireRole)("evangelizador", "super_admin"), (0, asyncHandler_1.asyncHandler)(statsController.getClassesStats));
+router.get("/overview", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.getOverview));
+router.get("/classes", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.getClassesStats));
 router.get("/classes/:id", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHandler)(requireClassOwnerOrAdmin_1.requireClassOwnerOrAdmin), (0, asyncHandler_1.asyncHandler)(statsController.getClassDetailStats));
 exports.statsRoutes = router;
 //# sourceMappingURL=stats.routes.js.map

@@ -11,13 +11,13 @@ router.use(authJwt);
 
 router.get(
   "/responsibles",
-  requireRole("evangelizador", "super_admin"),
+  requireRole("SUPER_ADMIN", "COORDENADOR"),
   asyncHandler(classesController.listResponsibles)
 );
 
 router.post(
   "/",
-  requireRole("evangelizador", "super_admin"),
+  requireRole("SUPER_ADMIN", "COORDENADOR"),
   asyncHandler(classesController.createClass)
 );
 
@@ -28,20 +28,27 @@ router.get(
 );
 
 router.get(
+  "/today",
+  requireAuth,
+  asyncHandler(classesController.getTodayClass)
+);
+
+router.get(
   "/:id/participants",
   requireAuth,
+  asyncHandler(requireClassOwnerOrAdmin),
   asyncHandler(classesController.listParticipants)
 );
 
 router.post(
   "/:id/participants",
-  requireRole("super_admin"),
+  requireRole("SUPER_ADMIN", "COORDENADOR"),
   asyncHandler(classesController.addParticipant)
 );
 
 router.delete(
   "/:id/participants/:participantId",
-  requireRole("super_admin"),
+  requireRole("SUPER_ADMIN", "COORDENADOR"),
   asyncHandler(classesController.removeParticipant)
 );
 

@@ -1,8 +1,15 @@
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/utils/hash";
+import { getDatabaseUrl } from "../src/config/env";
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: getDatabaseUrl(),
+    },
+  },
+});
 
 const SEED_USERNAME = "andre";
 const SEED_EMAIL = "andre@local";
@@ -11,44 +18,22 @@ const SEED_PASSWORD = "Admin@123" as const;
 async function main() {
   const passwordHash = await hashPassword(SEED_PASSWORD);
 
-  const SEED_PERSON_ID = "00000000-0000-0000-0000-000000000001";
-
-  const person = await prisma.people.upsert({
-    where: { id: SEED_PERSON_ID },
-    create: {
-      id: SEED_PERSON_ID,
-      fullName: "André Admin",
-      email: SEED_EMAIL,
-      type: "worker",
-      status: "active",
-    },
-    update: {},
-  });
-
-  await prisma.worker.upsert({
-    where: { personId: person.id },
-    create: {
-      personId: person.id,
-      function: "Administrador",
-      role: "super_admin",
-    },
-    update: {},
-  });
-
-  await prisma.authUser.upsert({
+  await prisma.user.upsert({
     where: { username: SEED_USERNAME },
     create: {
-      username: SEED_USERNAME,
+      name: "André Admin",
       email: SEED_EMAIL,
+      username: SEED_USERNAME,
       passwordHash,
-      personId: person.id,
-      isActive: true,
+      role: "SUPER_ADMIN",
+      status: "active",
     },
     update: {
       email: SEED_EMAIL,
       passwordHash,
-      personId: person.id,
-      isActive: true,
+      name: "André Admin",
+      role: "SUPER_ADMIN",
+      status: "active",
     },
   });
 

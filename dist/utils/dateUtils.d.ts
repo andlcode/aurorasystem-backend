@@ -33,4 +33,5 @@ export declare function getCurrentMonthRangeBahia(): {
     start: Date;
     end: Date;
 };
+export declare function getCurrentWeekdayBahia(): number;
 //# sourceMappingURL=dateUtils.d.ts.map

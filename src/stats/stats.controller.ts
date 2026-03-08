@@ -110,11 +110,11 @@ export async function getOverview(req: Request, res: Response) {
     attendances,
   ] = await Promise.all([
     prisma.class.count(),
-    prisma.people.count({
-      where: { type: "participant", status: "active" },
+    prisma.participant.count({
+      where: { status: "active" },
     }),
-    prisma.people.count({
-      where: { type: "worker", status: "active" },
+    prisma.user.count({
+      where: { status: "active" },
     }),
     prisma.classSession.count({
       where: {
@@ -156,9 +156,9 @@ export async function getDashboard(req: Request, res: Response) {
   }
 
   const role = req.user?.role ?? req.userRole;
-  const personId = req.user?.personId ?? req.userId;
-  const canViewAll = role === "super_admin" || role === "evangelizador";
-  const classWhere = canViewAll ? {} : { responsibleUserId: personId };
+  const userId = req.user?.userId ?? req.userId;
+  const canViewAll = role === "SUPER_ADMIN" || role === "COORDENADOR";
+  const classWhere = canViewAll ? {} : { responsibleUserId: userId };
   const filters = parsed.data;
   const filterStart = filters.from ? toUtcDateStart(filters.from) : undefined;
   const filterEnd = filters.to ? toUtcDateEnd(filters.to) : undefined;
@@ -183,11 +183,8 @@ export async function getDashboard(req: Request, res: Response) {
     ? accessibleClasses.filter((item) => item.id === filters.classId)
     : accessibleClasses;
   const classIds = filteredClasses.map((item) => item.id);
-  const activeTeamMembersPromise = prisma.people.count({
-    where: {
-      type: "worker",
-      status: "active",
-    },
+  const activeTeamMembersPromise = prisma.user.count({
+    where: { status: "active" },
   });
 
   if (filteredClasses.length === 0) {
@@ -205,6 +202,8 @@ export async function getDashboard(req: Request, res: Response) {
       },
       attendanceByClass: [],
       attendanceByMonth: monthSeries,
+      attendanceByParticipant: [],
+      consecutiveAbsences: [],
       attendanceByDay: DAY_LABELS.map((label, day) => ({
         day,
         label,
@@ -245,7 +244,6 @@ export async function getDashboard(req: Request, res: Response) {
       classId: { in: classIds },
       ...(dateWhere && { sessionDate: dateWhere }),
     },
-    participant: { type: "participant" as const },
     ...(filters.status !== "all" && { status: filters.status }),
   };
   const sessionWhere = {
@@ -258,10 +256,8 @@ export async function getDashboard(req: Request, res: Response) {
       prisma.classParticipant.findMany({
         where: {
           classId: { in: classIds },
-          participant: {
-            type: "participant",
-            status: "active",
-          },
+          status: "active",
+          participant: { status: "active" },
         },
         distinct: ["participantId"],
         select: { participantId: true },
@@ -279,7 +275,7 @@ export async function getDashboard(req: Request, res: Response) {
           participantId: true,
           participant: {
             select: {
-              fullName: true,
+              name: true,
               email: true,
               createdAt: true,
             },
@@ -321,16 +317,14 @@ export async function getDashboard(req: Request, res: Response) {
       prisma.classParticipant.findMany({
         where: {
           classId: { in: classIds },
-          participant: {
-            type: "participant",
-            status: "active",
-          },
+          status: "active",
+          participant: { status: "active" },
         },
         include: {
           participant: {
             select: {
               id: true,
-              fullName: true,
+              name: true,
               email: true,
               createdAt: true,
             },
@@ -354,6 +348,17 @@ export async function getDashboard(req: Request, res: Response) {
       { className: item.name, present: 0, total: 0, sessionDates: new Set<string>() },
     ])
   );
+  const participantAttendanceMap = new Map<
+    string,
+    {
+      participantId: string;
+      participantName: string;
+      className: string | null;
+      presentCount: number;
+      totalAttendanceRecords: number;
+      latestSessionDate: string | null;
+    }
+  >();
   const absenceMap = new Map<
     string,
     {
@@ -370,11 +375,20 @@ export async function getDashboard(req: Request, res: Response) {
     absent: 0,
     justified: 0,
   };
+  const attendancesByParticipant = new Map<
+    string,
+    Array<{
+      status: "present" | "absent" | "justified";
+      sessionDate: string;
+      className: string;
+    }>
+  >();
 
   let totalAttendances = 0;
   let totalPresent = 0;
 
   for (const attendance of attendances) {
+    const attendanceDate = toDateOnly(attendance.session.sessionDate);
     totalAttendances++;
     statusCounter[attendance.status]++;
     if (attendance.status === "present") {
@@ -384,13 +398,39 @@ export async function getDashboard(req: Request, res: Response) {
     const classStats = classAttendanceMap.get(attendance.session.classId);
     if (classStats) {
       classStats.total++;
-      classStats.sessionDates.add(toDateOnly(attendance.session.sessionDate));
+      classStats.sessionDates.add(attendanceDate);
       if (attendance.status === "present") {
         classStats.present++;
       }
     }
 
-    const monthKey = toDateOnly(attendance.session.sessionDate).slice(0, 7);
+    const participantStats = participantAttendanceMap.get(attendance.participantId) ?? {
+      participantId: attendance.participantId,
+      participantName: attendance.participant.name,
+      className: attendance.session.class_.name,
+      presentCount: 0,
+      totalAttendanceRecords: 0,
+      latestSessionDate: null,
+    };
+    participantStats.totalAttendanceRecords++;
+    if (attendance.status === "present") {
+      participantStats.presentCount++;
+    }
+    if (!participantStats.latestSessionDate || attendanceDate > participantStats.latestSessionDate) {
+      participantStats.latestSessionDate = attendanceDate;
+      participantStats.className = attendance.session.class_.name;
+    }
+    participantAttendanceMap.set(attendance.participantId, participantStats);
+
+    const participantRecords = attendancesByParticipant.get(attendance.participantId) ?? [];
+    participantRecords.push({
+      status: attendance.status,
+      sessionDate: attendanceDate,
+      className: attendance.session.class_.name,
+    });
+    attendancesByParticipant.set(attendance.participantId, participantRecords);
+
+    const monthKey = attendanceDate.slice(0, 7);
     const monthStats = monthLookup.get(monthKey);
     if (monthStats) {
       monthStats.total++;
@@ -414,7 +454,7 @@ export async function getDashboard(req: Request, res: Response) {
     const absenceKey = `${attendance.session.classId}:${attendance.participantId}`;
     const currentAbsence = absenceMap.get(absenceKey) ?? {
       participantId: attendance.participantId,
-      participantName: attendance.participant.fullName,
+      participantName: attendance.participant.name,
       classId: attendance.session.classId,
       className: attendance.session.class_.name,
       absences: 0,
@@ -426,9 +466,8 @@ export async function getDashboard(req: Request, res: Response) {
     }
 
     if (attendance.status === "present") {
-      const date = toDateOnly(attendance.session.sessionDate);
-      if (!currentAbsence.lastPresence || date > currentAbsence.lastPresence) {
-        currentAbsence.lastPresence = date;
+      if (!currentAbsence.lastPresence || attendanceDate > currentAbsence.lastPresence) {
+        currentAbsence.lastPresence = attendanceDate;
       }
     }
 
@@ -453,12 +492,50 @@ export async function getDashboard(req: Request, res: Response) {
 
     uniqueRecentStudents.set(entry.participant.id, {
       participantId: entry.participant.id,
-      participantName: entry.participant.fullName,
+      participantName: entry.participant.name,
       email: entry.participant.email,
       classId: entry.class_.id,
       className: entry.class_.name,
       joinedAt: toDateOnly(entry.createdAt),
     });
+  }
+
+  const consecutiveAbsenceMap = new Map<
+    string,
+    {
+      participantId: string;
+      participantName: string;
+      className: string | null;
+      consecutiveAbsences: number;
+      lastSessionDate: string | null;
+    }
+  >();
+
+  for (const [participantId, records] of attendancesByParticipant.entries()) {
+    const participantStats = participantAttendanceMap.get(participantId);
+    if (!participantStats) {
+      continue;
+    }
+
+    records.sort((left, right) => right.sessionDate.localeCompare(left.sessionDate));
+
+    let consecutiveAbsences = 0;
+    for (const record of records) {
+      if (record.status !== "absent") {
+        break;
+      }
+      consecutiveAbsences++;
+    }
+
+    if (consecutiveAbsences > 0) {
+      consecutiveAbsenceMap.set(participantId, {
+        participantId,
+        participantName: participantStats.participantName,
+        className: records[0]?.className ?? participantStats.className,
+        consecutiveAbsences,
+        lastSessionDate: records[0]?.sessionDate ?? null,
+      });
+    }
   }
 
   const attendanceRate =
@@ -498,6 +575,33 @@ export async function getDashboard(req: Request, res: Response) {
             : 0,
       };
     }),
+    attendanceByParticipant: Array.from(participantAttendanceMap.values())
+      .map((item) => ({
+        participantId: item.participantId,
+        participantName: item.participantName,
+        className: item.className,
+        attendanceRate:
+          item.totalAttendanceRecords > 0
+            ? roundPercentage((item.presentCount / item.totalAttendanceRecords) * 100)
+            : 0,
+        presentCount: item.presentCount,
+        totalAttendanceRecords: item.totalAttendanceRecords,
+      }))
+      .sort((left, right) => {
+        if (right.attendanceRate !== left.attendanceRate) {
+          return right.attendanceRate - left.attendanceRate;
+        }
+        return left.participantName.localeCompare(right.participantName, "pt-BR");
+      })
+      .slice(0, 12),
+    consecutiveAbsences: Array.from(consecutiveAbsenceMap.values())
+      .sort((left, right) => {
+        if (right.consecutiveAbsences !== left.consecutiveAbsences) {
+          return right.consecutiveAbsences - left.consecutiveAbsences;
+        }
+        return left.participantName.localeCompare(right.participantName, "pt-BR");
+      })
+      .slice(0, 10),
     attendanceByDay: Array.from(dayLookup.entries()).map(([day, stats]) => ({
       day,
       label: stats.label,
@@ -567,7 +671,15 @@ export async function getClassesStats(req: Request, res: Response) {
 
   const classes = await prisma.class.findMany({
     include: {
-      participants: { select: { participantId: true } },
+      participants: {
+        where: {
+          isActive: true,
+          participant: {
+            status: "active",
+          },
+        },
+        select: { participantId: true },
+      },
       sessions: {
         where: { sessionDate: { gte: start, lte: end } },
         include: {

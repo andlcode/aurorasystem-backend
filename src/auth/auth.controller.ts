@@ -10,7 +10,8 @@ import {
   resetPasswordSchema,
   registerSchema,
 } from "./auth.dto";
-import type { WorkerRole } from "@prisma/client";
+import type { UserRole } from "@prisma/client";
+import { EVANGELIZADOR_ROLE } from "../constants/roles";
 
 const JWT_EXPIRES_IN = "7d";
 
@@ -22,40 +23,30 @@ export async function login(req: Request, res: Response) {
   }
   const { username, password } = parsed.data;
 
-  const authUser = await prisma.authUser.findFirst({
+  const user = await prisma.user.findFirst({
     where: {
       username: { equals: username, mode: "insensitive" },
     },
-    include: {
-      person: {
-        include: { worker: true },
-      },
-    },
   });
 
-  if (!authUser) {
+  if (!user) {
     res.status(401).json({ error: "Credenciais inválidas" });
     return;
   }
 
-  if (!authUser.isActive) {
+  if (user.status !== "active") {
     res.status(401).json({ error: "Usuário inativo" });
     return;
   }
 
-  const valid = await verifyPassword(password, authUser.passwordHash);
+  const valid = await verifyPassword(password, user.passwordHash);
   if (!valid) {
     res.status(401).json({ error: "Credenciais inválidas" });
     return;
   }
 
-  if (!authUser.person.worker) {
-    res.status(403).json({ error: "Pessoa não é um trabalhador" });
-    return;
-  }
-
-  await prisma.authUser.update({
-    where: { id: authUser.id },
+  await prisma.user.update({
+    where: { id: user.id },
     data: { lastLoginAt: new Date() },
   });
 
@@ -66,9 +57,8 @@ export async function login(req: Request, res: Response) {
   }
 
   const payload = {
-    userId: authUser.id,
-    personId: authUser.personId,
-    role: authUser.person.worker.role,
+    userId: user.id,
+    role: user.role,
   };
 
   const token = jwt.sign(payload, secret, { expiresIn: JWT_EXPIRES_IN });
@@ -76,10 +66,10 @@ export async function login(req: Request, res: Response) {
   res.json({
     token,
     user: {
-      personId: authUser.personId,
-      username: authUser.username,
-      role: authUser.person.worker.role,
-      fullName: authUser.person.fullName,
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      name: user.name,
     },
   });
 }
@@ -92,15 +82,14 @@ export async function forgotPassword(req: Request, res: Response) {
   }
   const { usernameOrEmail } = parsed.data;
 
-  const authUser = await prisma.authUser.findFirst({
+  const user = await prisma.user.findFirst({
     where: {
       OR: [
         { username: { equals: usernameOrEmail, mode: "insensitive" } },
         { email: { equals: usernameOrEmail, mode: "insensitive" } },
       ],
-      isActive: true,
+      status: "active",
     },
-    include: { person: true },
   });
 
   res.status(200).json({
@@ -108,9 +97,9 @@ export async function forgotPassword(req: Request, res: Response) {
       "Se o usuário existir, você receberá um e-mail com instruções para redefinir sua senha.",
   });
 
-  if (!authUser) return;
+  if (!user) return;
 
-  const emailTo = authUser.email ?? authUser.person.email;
+  const emailTo = user.email;
   if (!emailTo) {
     return;
   }
@@ -130,7 +119,7 @@ export async function forgotPassword(req: Request, res: Response) {
 
   await prisma.passwordResetToken.create({
     data: {
-      userId: authUser.id,
+      userId: user.id,
       tokenHash,
       expiresAt,
     },
@@ -172,7 +161,7 @@ export async function resetPassword(req: Request, res: Response) {
   const passwordHash = await hashPassword(newPassword);
 
   await prisma.$transaction([
-    prisma.authUser.update({
+    prisma.user.update({
       where: { id: resetToken.userId },
       data: { passwordHash },
     }),
@@ -197,11 +186,11 @@ export async function register(req: Request, res: Response) {
   }
   const data = parsed.data;
 
-  const existing = await prisma.authUser.findFirst({
+  const existing = await prisma.user.findFirst({
     where: {
       OR: [
         { username: { equals: data.username, mode: "insensitive" } },
-        ...(data.email ? [{ email: data.email }, { person: { email: data.email } }] : []),
+        ...(data.email ? [{ email: data.email }] : []),
       ],
     },
   });
@@ -214,41 +203,24 @@ export async function register(req: Request, res: Response) {
   console.log("[Auth] POST /auth/register - criando usuário:", data.username);
   const passwordHash = await hashPassword(data.password);
 
-  const result = await prisma.$transaction(async (tx) => {
-    const person = await tx.people.create({
-      data: {
-        fullName: data.fullName,
-        email: data.email ?? null,
-        type: "worker",
-        worker: {
-          create: {
-            function: data.function,
-            role: data.role as WorkerRole,
-          },
-        },
-      },
-      include: { worker: true },
-    });
-
-    await tx.authUser.create({
-      data: {
-        username: data.username,
-        email: data.email ?? null,
-        passwordHash,
-        personId: person.id,
-      },
-    });
-
-    return person;
+  const user = await prisma.user.create({
+    data: {
+      name: data.fullName,
+      username: data.username,
+      email: data.email ?? null,
+      passwordHash,
+      role: (data.role ?? EVANGELIZADOR_ROLE) as UserRole,
+      status: "active",
+    },
   });
 
-  console.log("[Auth] POST /auth/register - usuário criado com sucesso:", result.id, data.username);
+  console.log("[Auth] POST /auth/register - usuário criado com sucesso:", user.id, data.username);
   res.status(201).json({
     user: {
-      personId: result.id,
-      username: data.username,
-      role: result.worker!.role,
-      fullName: result.fullName,
+      userId: user.id,
+      username: user.username,
+      role: user.role,
+      name: user.name,
     },
   });
 }

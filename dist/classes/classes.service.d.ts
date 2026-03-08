@@ -1,50 +1,44 @@
+import { UserRole } from "@prisma/client";
 import type { CreateClassInput, PatchClassInput, AddParticipantInput } from "./classes.dto.js";
-import type { WorkerRole } from "@prisma/client";
 export declare function listResponsibles(): Promise<{
     id: string;
     name: string;
     fullName: string;
     email: string | null;
-    role: import("@prisma/client").$Enums.WorkerRole | undefined;
+    role: import("@prisma/client").$Enums.UserRole;
 }[]>;
-export declare function createClass(data: CreateClassInput, createdByPersonId: string | null): Promise<{
+export declare function createClass(data: CreateClassInput, createdByUserId: string | null): Promise<{
     responsible: {
-        worker: {
-            function: string;
-            role: import("@prisma/client").$Enums.WorkerRole;
-            personId: string;
-            createdAt: Date;
-            updatedAt: Date;
-            notes: string | null;
-        } | null;
-    } & {
-        type: import("@prisma/client").$Enums.PersonType;
-        status: import("@prisma/client").$Enums.PersonStatus;
-        fullName: string;
-        email: string | null;
+        name: string;
         id: string;
+        email: string | null;
+        username: string;
+        passwordHash: string;
+        role: import("@prisma/client").$Enums.UserRole;
+        status: import("@prisma/client").$Enums.UserStatus;
+        lastLoginAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        birthDate: Date | null;
-        phone: string | null;
     };
     participants: ({
         participant: {
-            type: import("@prisma/client").$Enums.PersonType;
-            status: import("@prisma/client").$Enums.PersonStatus;
-            fullName: string;
-            email: string | null;
+            name: string;
             id: string;
+            email: string | null;
+            status: import("@prisma/client").$Enums.ParticipantStatus;
             createdAt: Date;
             updatedAt: Date;
-            birthDate: Date | null;
             phone: string | null;
+            notes: string | null;
         };
     } & {
         id: string;
+        status: import("@prisma/client").$Enums.ClassParticipantStatus;
         createdAt: Date;
-        participantId: string;
         classId: string;
+        participantId: string;
+        startDate: Date;
+        endDate: Date | null;
     })[];
 } & {
     name: string;
@@ -55,44 +49,38 @@ export declare function createClass(data: CreateClassInput, createdByPersonId: s
     time: string;
     responsibleUserId: string;
 }>;
-export declare function listClasses(role: WorkerRole, personId: string): Promise<({
+export declare function listClasses(role: UserRole, userId: string): Promise<({
     responsible: {
-        worker: {
-            function: string;
-            role: import("@prisma/client").$Enums.WorkerRole;
-            personId: string;
-            createdAt: Date;
-            updatedAt: Date;
-            notes: string | null;
-        } | null;
-    } & {
-        type: import("@prisma/client").$Enums.PersonType;
-        status: import("@prisma/client").$Enums.PersonStatus;
-        fullName: string;
-        email: string | null;
+        name: string;
         id: string;
+        email: string | null;
+        username: string;
+        passwordHash: string;
+        role: import("@prisma/client").$Enums.UserRole;
+        status: import("@prisma/client").$Enums.UserStatus;
+        lastLoginAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
-        birthDate: Date | null;
-        phone: string | null;
     };
     participants: ({
         participant: {
-            type: import("@prisma/client").$Enums.PersonType;
-            status: import("@prisma/client").$Enums.PersonStatus;
-            fullName: string;
-            email: string | null;
+            name: string;
             id: string;
+            email: string | null;
+            status: import("@prisma/client").$Enums.ParticipantStatus;
             createdAt: Date;
             updatedAt: Date;
-            birthDate: Date | null;
             phone: string | null;
+            notes: string | null;
         };
     } & {
         id: string;
+        status: import("@prisma/client").$Enums.ClassParticipantStatus;
         createdAt: Date;
-        participantId: string;
         classId: string;
+        participantId: string;
+        startDate: Date;
+        endDate: Date | null;
     })[];
 } & {
     name: string;
@@ -103,44 +91,96 @@ export declare function listClasses(role: WorkerRole, personId: string): Promise
     time: string;
     responsibleUserId: string;
 })[]>;
-export declare function getClassById(classId: string, role: WorkerRole, personId: string): Promise<({
-    responsible: {
-        worker: {
-            function: string;
-            role: import("@prisma/client").$Enums.WorkerRole;
-            personId: string;
+export declare function getTodayClassForResponsible(userId: string): Promise<{
+    name: string;
+    id: string;
+    day: number;
+    time: string;
+    responsibleUserId: string;
+} | null>;
+export declare function getClassById(classId: string, role: UserRole, userId: string): Promise<{
+    status: "not_found";
+    class?: undefined;
+} | {
+    status: "forbidden";
+    class?: undefined;
+} | {
+    status: "ok";
+    class: {
+        responsible: {
+            name: string;
+            id: string;
+            email: string | null;
+            username: string;
+            passwordHash: string;
+            role: import("@prisma/client").$Enums.UserRole;
+            status: import("@prisma/client").$Enums.UserStatus;
+            lastLoginAt: Date | null;
             createdAt: Date;
             updatedAt: Date;
-            notes: string | null;
-        } | null;
+        };
+        participants: ({
+            participant: {
+                name: string;
+                id: string;
+                email: string | null;
+                status: import("@prisma/client").$Enums.ParticipantStatus;
+                createdAt: Date;
+                updatedAt: Date;
+                phone: string | null;
+                notes: string | null;
+            };
+        } & {
+            id: string;
+            status: import("@prisma/client").$Enums.ClassParticipantStatus;
+            createdAt: Date;
+            classId: string;
+            participantId: string;
+            startDate: Date;
+            endDate: Date | null;
+        })[];
     } & {
-        type: import("@prisma/client").$Enums.PersonType;
-        status: import("@prisma/client").$Enums.PersonStatus;
-        fullName: string;
-        email: string | null;
+        name: string;
         id: string;
         createdAt: Date;
         updatedAt: Date;
-        birthDate: Date | null;
-        phone: string | null;
+        day: number;
+        time: string;
+        responsibleUserId: string;
+    };
+}>;
+export declare function patchClass(classId: string, data: PatchClassInput, role: UserRole, userId: string): Promise<({
+    responsible: {
+        name: string;
+        id: string;
+        email: string | null;
+        username: string;
+        passwordHash: string;
+        role: import("@prisma/client").$Enums.UserRole;
+        status: import("@prisma/client").$Enums.UserStatus;
+        lastLoginAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
     };
     participants: ({
         participant: {
-            type: import("@prisma/client").$Enums.PersonType;
-            status: import("@prisma/client").$Enums.PersonStatus;
-            fullName: string;
-            email: string | null;
+            name: string;
             id: string;
+            email: string | null;
+            status: import("@prisma/client").$Enums.ParticipantStatus;
             createdAt: Date;
             updatedAt: Date;
-            birthDate: Date | null;
             phone: string | null;
+            notes: string | null;
         };
     } & {
         id: string;
+        status: import("@prisma/client").$Enums.ClassParticipantStatus;
         createdAt: Date;
-        participantId: string;
         classId: string;
+        participantId: string;
+        startDate: Date;
+        endDate: Date | null;
     })[];
 } & {
     name: string;
@@ -151,95 +191,49 @@ export declare function getClassById(classId: string, role: WorkerRole, personId
     time: string;
     responsibleUserId: string;
 }) | null>;
-export declare function patchClass(classId: string, data: PatchClassInput, role: WorkerRole, personId: string): Promise<({
-    responsible: {
-        worker: {
-            function: string;
-            role: import("@prisma/client").$Enums.WorkerRole;
-            personId: string;
-            createdAt: Date;
-            updatedAt: Date;
-            notes: string | null;
-        } | null;
-    } & {
-        type: import("@prisma/client").$Enums.PersonType;
-        status: import("@prisma/client").$Enums.PersonStatus;
-        fullName: string;
-        email: string | null;
-        id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        birthDate: Date | null;
-        phone: string | null;
-    };
-    participants: ({
-        participant: {
-            type: import("@prisma/client").$Enums.PersonType;
-            status: import("@prisma/client").$Enums.PersonStatus;
-            fullName: string;
-            email: string | null;
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            birthDate: Date | null;
-            phone: string | null;
-        };
-    } & {
-        id: string;
-        createdAt: Date;
-        participantId: string;
-        classId: string;
-    })[];
-} & {
-    name: string;
-    id: string;
-    createdAt: Date;
-    updatedAt: Date;
-    day: number;
-    time: string;
-    responsibleUserId: string;
-}) | null>;
-export declare function addParticipant(classId: string, data: AddParticipantInput): Promise<{
+export declare function addParticipant(classId: string, data: AddParticipantInput, options?: {
+    closeExistingMemberships?: boolean;
+}): Promise<{
     participant: {
-        type: import("@prisma/client").$Enums.PersonType;
-        status: import("@prisma/client").$Enums.PersonStatus;
-        fullName: string;
-        email: string | null;
+        name: string;
         id: string;
+        email: string | null;
+        status: import("@prisma/client").$Enums.ParticipantStatus;
         createdAt: Date;
         updatedAt: Date;
-        birthDate: Date | null;
         phone: string | null;
+        notes: string | null;
     };
 } & {
     id: string;
+    status: import("@prisma/client").$Enums.ClassParticipantStatus;
     createdAt: Date;
-    participantId: string;
     classId: string;
+    participantId: string;
+    startDate: Date;
+    endDate: Date | null;
 }>;
 export declare function removeParticipant(classId: string, participantId: string): Promise<void>;
 export declare function listParticipants(classId: string): Promise<{
     createdAt: Date;
-    type: import("@prisma/client").$Enums.PersonType;
-    status: import("@prisma/client").$Enums.PersonStatus;
-    fullName: string;
-    email: string | null;
+    name: string;
     id: string;
+    email: string | null;
+    status: import("@prisma/client").$Enums.ParticipantStatus;
     updatedAt: Date;
-    birthDate: Date | null;
     phone: string | null;
+    notes: string | null;
 }[]>;
-export declare function openSession(classId: string, dateString: string, createdByPersonId: string): Promise<{
+export declare function openSession(classId: string, dateString: string, createdByUserId: string): Promise<{
     members: {
         createdAt: Date;
-        type: import("@prisma/client").$Enums.PersonType;
-        status: import("@prisma/client").$Enums.PersonStatus;
-        fullName: string;
-        email: string | null;
+        name: string;
         id: string;
+        email: string | null;
+        status: import("@prisma/client").$Enums.ParticipantStatus;
         updatedAt: Date;
-        birthDate: Date | null;
         phone: string | null;
+        notes: string | null;
     }[];
     class_: {
         name: string;
@@ -258,32 +252,58 @@ export declare function openSession(classId: string, dateString: string, created
     createdBy: string;
 }>;
 export declare function listSessions(classId: string, month?: string): Promise<{
-    month: number;
-    year: number;
-    weekOfMonth: number;
-    present: number;
-    absent: number;
-    justified: number;
-    participantCount: number;
-    attendances: {
-        status: import("@prisma/client").$Enums.AttendanceStatus;
-        id: string;
-        createdAt: Date;
-        updatedAt: Date;
-        participantId: string;
-        sessionId: string;
-        justificationReason: string | null;
-        recordedBy: string;
-    }[];
-    class_: {
+    members: {
+        attendance: {
+            participant: {
+                name: string;
+                id: string;
+                email: string | null;
+                status: import("@prisma/client").$Enums.ParticipantStatus;
+                createdAt: Date;
+                updatedAt: Date;
+                phone: string | null;
+                notes: string | null;
+            };
+        } & {
+            id: string;
+            status: import("@prisma/client").$Enums.AttendanceStatus;
+            createdAt: Date;
+            updatedAt: Date;
+            sessionId: string;
+            participantId: string;
+            justificationReason: string | null;
+            recordedBy: string;
+        };
         name: string;
         id: string;
+        email: string | null;
+        status: import("@prisma/client").$Enums.ParticipantStatus;
         createdAt: Date;
         updatedAt: Date;
-        day: number;
-        time: string;
-        responsibleUserId: string;
-    };
+        phone: string | null;
+        notes: string | null;
+    }[];
+    attendances: ({
+        participant: {
+            name: string;
+            id: string;
+            email: string | null;
+            status: import("@prisma/client").$Enums.ParticipantStatus;
+            createdAt: Date;
+            updatedAt: Date;
+            phone: string | null;
+            notes: string | null;
+        };
+    } & {
+        id: string;
+        status: import("@prisma/client").$Enums.AttendanceStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        sessionId: string;
+        participantId: string;
+        justificationReason: string | null;
+        recordedBy: string;
+    })[];
     id: string;
     createdAt: Date;
     updatedAt: Date;
@@ -293,122 +313,37 @@ export declare function listSessions(classId: string, month?: string): Promise<{
 }[]>;
 export declare function getSessionById(classId: string, sessionId: string): Promise<{
     members: {
-        createdAt: Date;
-        type: import("@prisma/client").$Enums.PersonType;
-        status: import("@prisma/client").$Enums.PersonStatus;
-        fullName: string;
-        email: string | null;
-        id: string;
-        updatedAt: Date;
-        birthDate: Date | null;
-        phone: string | null;
-    }[];
-    attendanceMap: {
-        [k: string]: {
+        attendance: ({
             participant: {
-                type: import("@prisma/client").$Enums.PersonType;
-                status: import("@prisma/client").$Enums.PersonStatus;
-                fullName: string;
-                email: string | null;
+                name: string;
                 id: string;
+                email: string | null;
+                status: import("@prisma/client").$Enums.ParticipantStatus;
                 createdAt: Date;
                 updatedAt: Date;
-                birthDate: Date | null;
                 phone: string | null;
+                notes: string | null;
             };
         } & {
-            status: import("@prisma/client").$Enums.AttendanceStatus;
             id: string;
+            status: import("@prisma/client").$Enums.AttendanceStatus;
             createdAt: Date;
             updatedAt: Date;
-            participantId: string;
             sessionId: string;
+            participantId: string;
             justificationReason: string | null;
             recordedBy: string;
-        };
-    };
-    items: {
-        id: string;
-        participantId: string;
-        status: import("@prisma/client").$Enums.AttendanceStatus;
-        justificationReason: string | null;
-        participant: {
-            type: import("@prisma/client").$Enums.PersonType;
-            status: import("@prisma/client").$Enums.PersonStatus;
-            fullName: string;
-            email: string | null;
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            birthDate: Date | null;
-            phone: string | null;
-        };
-    }[];
-    present: number;
-    absent: number;
-    justified: number;
-    attendances: ({
-        participant: {
-            type: import("@prisma/client").$Enums.PersonType;
-            status: import("@prisma/client").$Enums.PersonStatus;
-            fullName: string;
-            email: string | null;
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            birthDate: Date | null;
-            phone: string | null;
-        };
-    } & {
-        status: import("@prisma/client").$Enums.AttendanceStatus;
-        id: string;
+        }) | null;
         createdAt: Date;
+        name: string;
+        id: string;
+        email: string | null;
+        status: import("@prisma/client").$Enums.ParticipantStatus;
         updatedAt: Date;
-        participantId: string;
-        sessionId: string;
-        justificationReason: string | null;
-        recordedBy: string;
-    })[];
+        phone: string | null;
+        notes: string | null;
+    }[];
     class_: {
-        responsible: {
-            worker: {
-                function: string;
-                role: import("@prisma/client").$Enums.WorkerRole;
-                personId: string;
-                createdAt: Date;
-                updatedAt: Date;
-                notes: string | null;
-            } | null;
-        } & {
-            type: import("@prisma/client").$Enums.PersonType;
-            status: import("@prisma/client").$Enums.PersonStatus;
-            fullName: string;
-            email: string | null;
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            birthDate: Date | null;
-            phone: string | null;
-        };
-        participants: ({
-            participant: {
-                type: import("@prisma/client").$Enums.PersonType;
-                status: import("@prisma/client").$Enums.PersonStatus;
-                fullName: string;
-                email: string | null;
-                id: string;
-                createdAt: Date;
-                updatedAt: Date;
-                birthDate: Date | null;
-                phone: string | null;
-            };
-        } & {
-            id: string;
-            createdAt: Date;
-            participantId: string;
-            classId: string;
-        })[];
-    } & {
         name: string;
         id: string;
         createdAt: Date;
@@ -417,6 +352,27 @@ export declare function getSessionById(classId: string, sessionId: string): Prom
         time: string;
         responsibleUserId: string;
     };
+    attendances: ({
+        participant: {
+            name: string;
+            id: string;
+            email: string | null;
+            status: import("@prisma/client").$Enums.ParticipantStatus;
+            createdAt: Date;
+            updatedAt: Date;
+            phone: string | null;
+            notes: string | null;
+        };
+    } & {
+        id: string;
+        status: import("@prisma/client").$Enums.AttendanceStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        sessionId: string;
+        participantId: string;
+        justificationReason: string | null;
+        recordedBy: string;
+    })[];
     id: string;
     createdAt: Date;
     updatedAt: Date;
@@ -428,27 +384,25 @@ export declare function putBulkAttendance(classId: string, sessionId: string, re
     participantId: string;
     status: string;
     notes?: string | null;
-}>, recordedBy: string): Promise<{
-    items: {
+}>, recordedBy: string): Promise<({
+    participant: {
+        name: string;
         id: string;
-        participantId: string;
-        status: import("@prisma/client").$Enums.AttendanceStatus;
-        justificationReason: string | null;
-        participant: {
-            type: import("@prisma/client").$Enums.PersonType;
-            status: import("@prisma/client").$Enums.PersonStatus;
-            fullName: string;
-            email: string | null;
-            id: string;
-            createdAt: Date;
-            updatedAt: Date;
-            birthDate: Date | null;
-            phone: string | null;
-        };
-    }[];
-    total: number;
-    present: number;
-    absent: number;
-    justified: number;
-}>;
+        email: string | null;
+        status: import("@prisma/client").$Enums.ParticipantStatus;
+        createdAt: Date;
+        updatedAt: Date;
+        phone: string | null;
+        notes: string | null;
+    };
+} & {
+    id: string;
+    status: import("@prisma/client").$Enums.AttendanceStatus;
+    createdAt: Date;
+    updatedAt: Date;
+    sessionId: string;
+    participantId: string;
+    justificationReason: string | null;
+    recordedBy: string;
+})[]>;
 //# sourceMappingURL=classes.service.d.ts.map

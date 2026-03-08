@@ -40,17 +40,37 @@ exports.getPeopleById = getPeopleById;
 exports.patchPeople = patchPeople;
 exports.patchPeopleStatus = patchPeopleStatus;
 exports.assignParticipantClass = assignParticipantClass;
+const client_1 = require("@prisma/client");
 const prisma_1 = require("../lib/prisma");
 const classesService = __importStar(require("../classes/classes.service"));
 const people_dto_1 = require("./people.dto");
-const RESPONSIBLE_ROLE_LABELS = {
-    super_admin: "super_admin",
-    evangelizador: "evangelizador",
-    worker: "moderador",
-};
+const roles_1 = require("../constants/roles");
+const RESPONSIBLE_ROLE_FILTERS = [
+    ...roles_1.LEGACY_SUPER_ADMIN_ROLE_VALUES,
+    ...roles_1.LEGACY_COORDENADOR_ROLE_VALUES,
+    ...roles_1.LEGACY_EVANGELIZADOR_ROLE_VALUES,
+];
 const peopleWithClassesInclude = {
     worker: true,
+    attendances: {
+        take: 1,
+        orderBy: {
+            session: {
+                sessionDate: "desc",
+            },
+        },
+        select: {
+            session: {
+                select: {
+                    sessionDate: true,
+                },
+            },
+        },
+    },
     classParticipants: {
+        where: {
+            isActive: true,
+        },
         include: {
             class_: {
                 select: {
@@ -71,6 +91,7 @@ const peopleWithClassesInclude = {
 function serializePerson(person) {
     return {
         ...person,
+        lastAttendanceDate: person.attendances[0]?.session.sessionDate ?? null,
         classes: person.classParticipants.map((item) => ({
             id: item.class_.id,
             name: item.class_.name,
@@ -87,6 +108,11 @@ async function createPeople(req, res) {
         return;
     }
     const data = parsed.data;
+    const userRole = req.userRole;
+    if (data.type === "worker" && userRole !== roles_1.SUPER_ADMIN_ROLE) {
+        res.status(403).json({ error: "Somente super admin pode criar membros da equipe" });
+        return;
+    }
     const birthDate = data.birthDate
         ? new Date(data.birthDate + "T00:00:00.000Z")
         : null;
@@ -102,7 +128,7 @@ async function createPeople(req, res) {
                 worker: {
                     create: {
                         function: data.function,
-                        role: (data.role ?? "worker"),
+                        role: (data.role ?? roles_1.EVANGELIZADOR_ROLE),
                     },
                 },
             }),
@@ -138,35 +164,26 @@ async function listPeople(req, res) {
     res.json(people.map(serializePerson));
 }
 async function listResponsaveis(req, res) {
-    const responsaveis = await prisma_1.prisma.people.findMany({
-        where: {
-            type: "worker",
-            status: "active",
-            authUser: {
-                is: {
-                    isActive: true,
-                },
-            },
-            worker: {
-                role: {
-                    in: ["super_admin", "evangelizador", "worker"],
-                },
-            },
-        },
-        include: {
-            worker: true,
-            authUser: true,
-        },
-        orderBy: {
-            fullName: "asc",
-        },
-    });
-    res.json(responsaveis.map((person) => ({
-        id: person.id,
-        name: person.fullName,
-        email: person.email ?? person.authUser?.email ?? null,
-        role: person.worker ? RESPONSIBLE_ROLE_LABELS[person.worker.role] : null,
-    })));
+    const responsaveis = await prisma_1.prisma.$queryRaw `
+    SELECT
+      p."id" AS "id",
+      p."fullName" AS "name",
+      COALESCE(p."email", au."email") AS "email",
+      CASE
+        WHEN w."role"::text IN (${client_1.Prisma.join(roles_1.LEGACY_SUPER_ADMIN_ROLE_VALUES)}) THEN ${roles_1.SUPER_ADMIN_ROLE}
+        WHEN w."role"::text IN (${client_1.Prisma.join(roles_1.LEGACY_COORDENADOR_ROLE_VALUES)}) THEN ${roles_1.COORDENADOR_ROLE}
+        ELSE ${roles_1.EVANGELIZADOR_ROLE}
+      END AS "role"
+    FROM "People" p
+    INNER JOIN "Worker" w ON w."personId" = p."id"
+    LEFT JOIN "AuthUser" au ON au."personId" = p."id"
+    WHERE p."type" = 'worker'
+      AND p."status" = 'active'
+      AND (au."isActive" = true OR au."isActive" IS NULL)
+      AND w."role"::text IN (${client_1.Prisma.join(RESPONSIBLE_ROLE_FILTERS)})
+    ORDER BY p."fullName" ASC
+  `;
+    res.json(responsaveis);
 }
 async function getPeopleById(req, res) {
     const { id } = req.params;
@@ -197,8 +214,12 @@ async function patchPeople(req, res) {
         res.status(404).json({ error: "Pessoa não encontrada" });
         return;
     }
-    if (existing.type === "participant" && userRole !== "super_admin") {
-        res.status(403).json({ error: "Somente super_admin pode editar participantes" });
+    if (existing.type === "participant" && userRole !== roles_1.SUPER_ADMIN_ROLE && userRole !== roles_1.COORDENADOR_ROLE) {
+        res.status(403).json({ error: "Somente super admin ou coordenador podem editar participantes" });
+        return;
+    }
+    if (existing.type === "worker" && userRole !== roles_1.SUPER_ADMIN_ROLE) {
+        res.status(403).json({ error: "Somente super admin pode editar membros da equipe" });
         return;
     }
     if (!existing.worker && (data.function != null || data.role != null)) {
@@ -207,8 +228,8 @@ async function patchPeople(req, res) {
         });
         return;
     }
-    if (data.role === "evangelizador" && userRole !== "super_admin") {
-        res.status(403).json({ error: "Somente super_admin pode promover para evangelizador" });
+    if (data.role != null && userRole !== roles_1.SUPER_ADMIN_ROLE) {
+        res.status(403).json({ error: "Somente super admin pode alterar a role" });
         return;
     }
     const birthDate = data.birthDate !== undefined
@@ -276,12 +297,16 @@ async function assignParticipantClass(req, res) {
         return;
     }
     try {
-        await classesService.addParticipant(parsed.data.classId, { participantId: id });
+        await classesService.addParticipant(parsed.data.classId, { participantId: id }, { closeExistingMemberships: true });
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : "Erro ao vincular aluno à turma";
-        const status = msg.includes("não encontrad") ? 404 : 400;
-        res.status(status).json({ error: msg });
+        const status = msg.includes("não encontrad")
+            ? 404
+            : msg.includes("já vinculado")
+                ? 409
+                : 400;
+        res.status(status).json({ error: msg, message: msg });
         return;
     }
     const updated = await prisma_1.prisma.people.findUnique({

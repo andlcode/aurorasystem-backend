@@ -2,8 +2,9 @@ import type { Request, Response, NextFunction } from "express";
 import { prisma } from "../lib/prisma";
 
 /**
- * Middleware que exige evangelizador/super_admin OU ser o responsável (moderador) da turma.
- * Deve ser usado após authJwt. Usa req.user. O :id deve ser o classId.
+ * Permite acesso total apenas a SUPER_ADMIN.
+ * Demais usuários (COORDENADOR, EVANGELIZADOR) só acessam turmas
+ * em que são o responsável (responsibleUserId === user.userId).
  */
 export async function requireClassOwnerOrAdmin(
   req: Request,
@@ -17,7 +18,7 @@ export async function requireClassOwnerOrAdmin(
   }
   const classId = req.params.id;
 
-  if (user.role === "evangelizador" || user.role === "super_admin") {
+  if (user.role === "SUPER_ADMIN") {
     next();
     return;
   }
@@ -32,8 +33,8 @@ export async function requireClassOwnerOrAdmin(
     return;
   }
 
-  if (class_.responsibleUserId !== user.personId) {
-    res.status(403).json({ error: "Sem permissão para editar esta turma" });
+  if (class_.responsibleUserId !== user.userId) {
+    res.status(403).json({ error: "Sem permissão para acessar esta turma" });
     return;
   }
 

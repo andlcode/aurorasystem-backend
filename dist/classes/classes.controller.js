@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.listResponsibles = listResponsibles;
 exports.createClass = createClass;
 exports.listClasses = listClasses;
+exports.getTodayClass = getTodayClass;
 exports.getClassById = getClassById;
 exports.patchClass = patchClass;
 exports.addParticipant = addParticipant;
@@ -82,13 +83,11 @@ async function listClasses(req, res) {
             userRole: req.userRole,
             userId: req.userId,
         });
-        const role = req.userRole;
-        const personId = req.userId;
-        if (!role || !personId) {
+        if (!req.userId) {
             res.status(401).json({ error: "Autenticação necessária" });
             return;
         }
-        const classes = await classesService.listClasses(role, personId);
+        const classes = await classesService.listClasses(req.userRole, req.userId);
         console.log("[Classes] GET /classes retorno:", classes);
         res.json(classes);
     }
@@ -97,16 +96,35 @@ async function listClasses(req, res) {
         res.status(500).json({ error: "Erro ao carregar turmas" });
     }
 }
+async function getTodayClass(req, res) {
+    try {
+        const personId = req.userId;
+        if (!personId) {
+            res.status(401).json({ error: "Autenticação necessária" });
+            return;
+        }
+        const class_ = await classesService.getTodayClassForResponsible(personId);
+        res.json(class_ ?? null);
+    }
+    catch (err) {
+        console.error("[Classes] Erro ao buscar turma de hoje:", err);
+        res.status(500).json({ error: "Não foi possível verificar a turma de hoje." });
+    }
+}
 async function getClassById(req, res) {
     const { id: classId } = req.params;
     const role = req.userRole;
     const personId = req.userId;
-    const class_ = await classesService.getClassById(classId, role, personId);
-    if (!class_) {
+    const result = await classesService.getClassById(classId, role, personId);
+    if (result.status === "not_found") {
         res.status(404).json({ error: "Turma não encontrada" });
         return;
     }
-    res.json(class_);
+    if (result.status === "forbidden") {
+        res.status(403).json({ error: "Sem permissão para acessar esta turma" });
+        return;
+    }
+    res.json(result.class);
 }
 async function patchClass(req, res) {
     const { id: classId } = req.params;
@@ -161,6 +179,7 @@ async function removeParticipant(req, res) {
 async function listParticipants(req, res) {
     const { id: classId } = req.params;
     try {
+        console.log("[Classes] GET /classes/:id/participants", { classId });
         const participants = await classesService.listParticipants(classId);
         res.json(participants);
     }
@@ -177,6 +196,7 @@ async function openSession(req, res) {
     }
     const dateString = parsed.data.date ?? (0, dateUtils_1.getLocalDateStringAmericaBahia)();
     try {
+        console.log("[Classes] POST /classes/:id/sessions/open", { classId, dateString });
         const session = await classesService.openSession(classId, dateString, req.userId);
         res.status(201).json(session);
     }
@@ -210,6 +230,7 @@ async function createOrGetSession(req, res) {
     }
     const dateString = parsed.data.date;
     try {
+        console.log("[Classes] POST /classes/:id/sessions", { classId, dateString });
         const session = await classesService.openSession(classId, dateString, req.userId);
         res.status(201).json(session);
     }

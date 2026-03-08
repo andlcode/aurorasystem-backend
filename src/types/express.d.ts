@@ -1,16 +1,15 @@
-import type { WorkerRole } from "@prisma/client";
+import type { UserRole } from "@prisma/client";
 
 export interface AuthUser {
   userId: string;
-  personId: string;
-  role: WorkerRole;
+  role: UserRole;
 }
 
 declare global {
   namespace Express {
     interface Request {
       user?: AuthUser;
-      userRole?: WorkerRole;
+      userRole?: UserRole;
       userId?: string;
     }
   }

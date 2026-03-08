@@ -7,20 +7,20 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum PersonType {
-  worker
-  participant
+enum UserRole {
+  SUPER_ADMIN
+  COORDENADOR
+  EVANGELIZADOR
 }
 
-enum PersonStatus {
+enum UserStatus {
   active
   inactive
 }
 
-enum WorkerRole {
-  super_admin
-  evangelizador
-  worker
+enum ParticipantStatus {
+  active
+  inactive
 }
 
 enum AttendanceStatus {
@@ -29,47 +29,31 @@ enum AttendanceStatus {
   justified
 }
 
-model People {
-  id        String       @id @default(uuid())
-  fullName  String
-  birthDate DateTime?    @db.Date
-  phone     String?
-  email     String?
-  type      PersonType
-  status    PersonStatus @default(active)
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
-
-  worker              Worker?
-  responsibleClasses  Class[]             @relation("ClassResponsible")
-  classParticipants   ClassParticipant[]
-  createdSessions     ClassSession[]
-  attendances       Attendance[]      @relation("ParticipantAttendance")
-  recordedAttendances Attendance[]    @relation("AttendanceRecorder")
-
-  authUser AuthUser?
-
-  @@index([fullName])
-  @@index([email])
-  @@index([phone])
+enum ClassParticipantStatus {
+  active
+  inactive
 }
 
-model AuthUser {
-  id           String    @id @default(uuid())
-  username     String    @unique
-  email        String?   @unique
+model User {
+  id           String     @id @default(uuid())
+  name         String
+  email        String?
+  username     String     @unique
   passwordHash String
-  personId     String    @unique
-  isActive     Boolean   @default(true)
+  role         UserRole   @default(EVANGELIZADOR)
+  status       UserStatus @default(active)
   lastLoginAt  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-  person               People                 @relation(fields: [personId], references: [id], onDelete: Cascade)
-  passwordResetTokens  PasswordResetToken[]
+  responsibleClasses  Class[]             @relation("ClassResponsible")
+  createdSessions     ClassSession[]
+  recordedAttendances Attendance[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([username])
   @@index([email])
+  @@index([status])
 }
 
 model PasswordResetToken {
@@ -80,21 +64,28 @@ model PasswordResetToken {
   usedAt     DateTime?
   createdAt  DateTime  @default(now())
 
-  user AuthUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([tokenHash])
 }
 
-model Worker {
-  personId  String     @id @unique
-  function  String
-  role      WorkerRole
+model Participant {
+  id        String            @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  status    ParticipantStatus @default(active)
   notes     String?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 
-  person People @relation(fields: [personId], references: [id], onDelete: Cascade)
+  classParticipants ClassParticipant[]
+  attendances        Attendance[]
+
+  @@index([name])
+  @@index([email])
+  @@index([status])
 }
 
 model Class {
@@ -103,10 +94,10 @@ model Class {
   day               Int
   time              String
   responsibleUserId String
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  responsible  People             @relation("ClassResponsible", fields: [responsibleUserId], references: [id])
+  responsible  User             @relation("ClassResponsible", fields: [responsibleUserId], references: [id])
   participants ClassParticipant[]
   sessions     ClassSession[]
 
@@ -114,17 +105,21 @@ model Class {
 }
 
 model ClassParticipant {
-  id            String   @id @default(uuid())
-  classId      String
+  id            String               @id @default(uuid())
+  classId       String
   participantId String
-  createdAt    DateTime @default(now())
+  status        ClassParticipantStatus @default(active)
+  startDate     DateTime             @default(now())
+  endDate       DateTime?
+  createdAt     DateTime             @default(now())
 
-  class_      Class  @relation(fields: [classId], references: [id], onDelete: Cascade)
-  participant People @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  class_      Class      @relation(fields: [classId], references: [id], onDelete: Restrict)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Restrict)
 
-  @@unique([classId, participantId])
   @@index([classId])
   @@index([participantId])
+  @@index([classId, status])
+  @@index([participantId, status])
 }
 
 model ClassSession {
@@ -135,8 +130,8 @@ model ClassSession {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  class_     Class       @relation(fields: [classId], references: [id], onDelete: Cascade)
-  creator    People      @relation(fields: [createdBy], references: [id])
+  class_     Class       @relation(fields: [classId], references: [id], onDelete: Restrict)
+  creator    User        @relation(fields: [createdBy], references: [id])
   attendances Attendance[]
 
   @@unique([classId, sessionDate])
@@ -154,9 +149,9 @@ model Attendance {
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
-  session      ClassSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  participant  People       @relation("ParticipantAttendance", fields: [participantId], references: [id], onDelete: Cascade)
-  recorder     People       @relation("AttendanceRecorder", fields: [recordedBy], references: [id])
+  session     ClassSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Restrict)
+  recorder    User         @relation(fields: [recordedBy], references: [id])
 
   @@unique([sessionId, participantId])
   @@index([sessionId])

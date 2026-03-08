@@ -7,6 +7,10 @@ exports.corsMiddleware = void 0;
 const cors_1 = __importDefault(require("cors"));
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "";
 const CORS_ORIGIN_REGEX = process.env.CORS_ORIGIN_REGEX;
+const STATIC_ALLOWED_ORIGINS = new Set(["http://localhost:5173"]);
+function normalizeOrigin(origin) {
+    return origin.replace(/\/$/, "");
+}
 let originRegex = null;
 if (CORS_ORIGIN_REGEX) {
     try {
@@ -20,9 +24,13 @@ exports.corsMiddleware = (0, cors_1.default)({
     origin: (origin, cb) => {
         if (!origin)
             return cb(null, true);
-        if (CORS_ORIGIN && origin === CORS_ORIGIN)
+        const normalizedOrigin = normalizeOrigin(origin);
+        const normalizedConfiguredOrigin = CORS_ORIGIN ? normalizeOrigin(CORS_ORIGIN) : "";
+        if (STATIC_ALLOWED_ORIGINS.has(normalizedOrigin))
             return cb(null, true);
-        if (originRegex && originRegex.test(origin))
+        if (normalizedConfiguredOrigin && normalizedOrigin === normalizedConfiguredOrigin)
+            return cb(null, true);
+        if (originRegex && originRegex.test(normalizedOrigin))
             return cb(null, true);
         return cb(new Error("Not allowed by CORS"));
     },

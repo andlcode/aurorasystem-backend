@@ -1,17 +1,16 @@
 import type { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import type { WorkerRole } from "@prisma/client";
+import type { UserRole } from "@prisma/client";
 
 export interface JwtPayload {
   userId: string;
-  personId: string;
-  role: WorkerRole;
+  role: UserRole;
 }
 
 /**
  * Middleware que lê o token JWT do header Authorization: Bearer <token>,
- * valida com JWT_SECRET e injeta req.user = { userId, personId, role }.
- * Também define req.userId e req.userRole para compatibilidade com controllers.
+ * valida com JWT_SECRET e injeta req.user = { userId, role }.
+ * req.userId = User.id para compatibilidade com controllers.
  */
 export function authJwt(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers.authorization;
@@ -33,9 +32,8 @@ export function authJwt(req: Request, res: Response, next: NextFunction) {
 
   try {
     const decoded = jwt.verify(token, secret) as JwtPayload;
-    console.log("[authJwt] Payload decodificado:", { userId: decoded.userId, personId: decoded.personId, role: decoded.role });
     req.user = decoded;
-    req.userId = decoded.personId;
+    req.userId = decoded.userId;
     req.userRole = decoded.role;
     next();
   } catch (err) {

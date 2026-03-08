@@ -1,11 +1,11 @@
 import type { Request, Response, NextFunction } from "express";
-import type { WorkerRole } from "@prisma/client";
+import type { UserRole } from "@prisma/client";
 
 /**
  * Middleware que exige que o usuário tenha uma das roles permitidas.
  * Deve ser usado após authJwt. Usa req.user.
  */
-export function requireRole(...allowedRoles: WorkerRole[]) {
+export function requireRole(...allowedRoles: UserRole[]) {
   return (req: Request, res: Response, next: NextFunction) => {
     const user = req.user;
     const currentRole = user?.role ?? req.userRole;

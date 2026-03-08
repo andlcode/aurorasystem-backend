@@ -61,6 +61,21 @@ export interface DashboardTopAbsenceItem {
     absences: number;
     lastPresence: string | null;
 }
+export interface DashboardAttendanceByParticipantItem {
+    participantId: string;
+    participantName: string;
+    className: string | null;
+    attendanceRate: number;
+    presentCount: number;
+    totalAttendanceRecords: number;
+}
+export interface DashboardConsecutiveAbsenceItem {
+    participantId: string;
+    participantName: string;
+    className: string | null;
+    consecutiveAbsences: number;
+    lastSessionDate: string | null;
+}
 export interface DashboardRecentSessionItem {
     sessionId: string;
     classId: string;
@@ -100,6 +115,13 @@ export interface DashboardFilterClassOption {
     id: string;
     name: string;
 }
+export interface StatsTodayClassResponse {
+    id: string;
+    name: string;
+    day: number;
+    time: string;
+    responsibleUserId: string;
+}
 export interface DashboardSelectedFilters {
     from: string | null;
     to: string | null;
@@ -114,6 +136,8 @@ export interface StatsDashboardResponse {
     totals: DashboardTotals;
     attendanceByClass: DashboardAttendanceByClassItem[];
     attendanceByMonth: DashboardAttendanceByMonthItem[];
+    attendanceByParticipant: DashboardAttendanceByParticipantItem[];
+    consecutiveAbsences: DashboardConsecutiveAbsenceItem[];
     attendanceByDay: DashboardAttendanceByDayItem[];
     statusDistribution: DashboardStatusDistributionItem[];
     topAbsences: DashboardTopAbsenceItem[];
