@@ -228,6 +228,10 @@ async function createOrGetSession(req, res) {
         res.status(400).json({ error: "Validação falhou", details: parsed.error.errors });
         return;
     }
+    if (!req.userId) {
+        res.status(401).json({ error: "Autenticação necessária" });
+        return;
+    }
     const dateString = parsed.data.date;
     try {
         console.log("[Classes] POST /classes/:id/sessions", { classId, dateString });
@@ -236,6 +240,7 @@ async function createOrGetSession(req, res) {
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : "Erro ao abrir sessão";
+        console.error("[Classes] Erro ao criar/obter sessão:", err);
         res.status(404).json({ error: msg });
     }
 }
@@ -251,6 +256,7 @@ async function getSessionById(req, res) {
     }
     catch (err) {
         const msg = err instanceof Error ? err.message : "Erro ao buscar sessão";
+        console.error("[Classes] Erro ao buscar sessão:", err);
         res.status(404).json({ error: msg });
     }
 }

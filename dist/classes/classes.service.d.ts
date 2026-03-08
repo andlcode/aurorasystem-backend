@@ -313,6 +313,7 @@ export declare function listSessions(classId: string, month?: string): Promise<{
 }[]>;
 export declare function getSessionById(classId: string, sessionId: string): Promise<{
     members: {
+        fullName: string;
         attendance: ({
             participant: {
                 name: string;
@@ -342,6 +343,10 @@ export declare function getSessionById(classId: string, sessionId: string): Prom
         updatedAt: Date;
         phone: string | null;
         notes: string | null;
+    }[];
+    items: {
+        participantId: string;
+        status: import("@prisma/client").$Enums.AttendanceStatus;
     }[];
     class_: {
         name: string;

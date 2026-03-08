@@ -551,7 +551,7 @@ async function getClassesStats(req, res) {
         include: {
             participants: {
                 where: {
-                    isActive: true,
+                    status: "active",
                     participant: {
                         status: "active",
                     },

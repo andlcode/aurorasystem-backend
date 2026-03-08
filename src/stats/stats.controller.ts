@@ -673,7 +673,7 @@ export async function getClassesStats(req: Request, res: Response) {
     include: {
       participants: {
         where: {
-          isActive: true,
+          status: "active",
           participant: {
             status: "active",
           },

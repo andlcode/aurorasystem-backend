@@ -363,19 +363,25 @@ async function getSessionById(classId, sessionId) {
     if (!session)
         return null;
     const members = await getSessionMembers(classId, session.sessionDate, session.attendances.map((a) => a.participantId));
+    const items = session.attendances.map((a) => ({
+        participantId: a.participantId,
+        status: a.status,
+    }));
     return {
         ...session,
         members: members.map((m) => {
             const att = session.attendances.find((a) => a.participantId === m.id);
             return {
                 ...m,
+                fullName: m.name,
                 attendance: att ?? null,
             };
         }),
+        items,
     };
 }
 async function putBulkAttendance(classId, sessionId, records, recordedBy) {
-    const session = await prisma_js_1.prisma.classSession.findUnique({
+    const session = await prisma_js_1.prisma.classSession.findFirst({
         where: { id: sessionId, classId },
         include: { class_: true },
     });

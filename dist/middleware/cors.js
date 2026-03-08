@@ -7,7 +7,10 @@ exports.corsMiddleware = void 0;
 const cors_1 = __importDefault(require("cors"));
 const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "";
 const CORS_ORIGIN_REGEX = process.env.CORS_ORIGIN_REGEX;
-const STATIC_ALLOWED_ORIGINS = new Set(["http://localhost:5173"]);
+const STATIC_ALLOWED_ORIGINS = new Set([
+    "http://localhost:5173",
+    "https://auroralis.vercel.app",
+]);
 function normalizeOrigin(origin) {
     return origin.replace(/\/$/, "");
 }
