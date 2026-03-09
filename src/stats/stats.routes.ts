@@ -53,6 +53,12 @@ router.get(
 );
 
 router.get(
+  "/attendance/classes/monthly",
+  requireRole("SUPER_ADMIN", "COORDENADOR"),
+  asyncHandler(statsController.listMonthlyAttendanceByClasses)
+);
+
+router.get(
   "/attendance/students/:participantId/monthly",
   requireRole("SUPER_ADMIN", "COORDENADOR"),
   asyncHandler(statsController.getMonthlyAttendanceByStudent)

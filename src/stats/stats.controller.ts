@@ -867,6 +867,22 @@ export async function listMonthlyAttendance(req: Request, res: Response) {
   }
 }
 
+export async function listMonthlyAttendanceByClasses(req: Request, res: Response) {
+  const parsed = monthlyAttendanceQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Filtros inválidos", details: parsed.error.errors });
+    return;
+  }
+
+  try {
+    const data = await statsService.listMonthlyAttendanceByClasses(parsed.data);
+    res.json(data);
+  } catch (err) {
+    console.error("[Stats] Erro ao listar estatísticas mensais por turma:", err);
+    res.status(500).json({ error: "Não foi possível carregar as estatísticas." });
+  }
+}
+
 export async function getMonthlyAttendanceByStudent(req: Request, res: Response) {
   const { participantId } = req.params;
   const parsed = monthlyAttendanceQuerySchema.safeParse(req.query);
