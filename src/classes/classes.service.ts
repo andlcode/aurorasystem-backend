@@ -22,16 +22,6 @@ const classInclude = {
   },
 };
 
-function getSessionDateBounds(sessionDate: Date) {
-  const sessionStart = new Date(sessionDate);
-  sessionStart.setUTCHours(0, 0, 0, 0);
-
-  const sessionEnd = new Date(sessionDate);
-  sessionEnd.setUTCHours(23, 59, 59, 999);
-
-  return { sessionStart, sessionEnd };
-}
-
 async function getActiveClassMemberships(classId: string) {
   return prisma.classParticipant.findMany({
     where: {
@@ -46,15 +36,17 @@ async function getActiveClassMemberships(classId: string) {
   });
 }
 
-async function getSessionMembers(classId: string, sessionDate: Date, attendanceParticipantIds: string[] = []) {
-  const { sessionStart, sessionEnd } = getSessionDateBounds(sessionDate);
-
+/**
+ * Retorna os participantes da turma para uma sessão.
+ * Usa getActiveClassMemberships para garantir consistência com a tela de detalhe da turma
+ * e evitar problemas de timezone com startDate/endDate.
+ */
+async function getSessionMembers(classId: string, _sessionDate: Date, attendanceParticipantIds: string[] = []) {
   const memberships = await prisma.classParticipant.findMany({
     where: {
       classId,
-      startDate: { lte: sessionEnd },
-      OR: [{ endDate: null }, { endDate: { gte: sessionStart } }],
       status: "active",
+      participant: { status: "active" as const },
     },
     include: { participant: true },
     orderBy: [{ participant: { name: "asc" } }, { startDate: "asc" }],
@@ -328,11 +320,13 @@ export async function listParticipants(classId: string) {
   if (!class_) throw new Error("Turma não encontrada");
 
   const participants = await getActiveClassMemberships(classId);
-
-  return participants.map((cp) => ({
+  const result = participants.map((cp) => ({
     ...cp.participant,
     createdAt: cp.startDate,
   }));
+
+  console.log("[Classes] listParticipants", { classId, count: result.length });
+  return result;
 }
 
 export async function openSession(classId: string, dateString: string, createdByUserId: string) {
@@ -340,6 +334,9 @@ export async function openSession(classId: string, dateString: string, createdBy
 
   const class_ = await prisma.class.findUnique({ where: { id: classId } });
   if (!class_) throw new Error("Turma não encontrada");
+
+  const participants = await getActiveClassMemberships(classId);
+  console.log("[Classes] openSession", { classId, dateString, participantsCount: participants.length });
 
   const session = await prisma.classSession.upsert({
     where: {
@@ -353,8 +350,6 @@ export async function openSession(classId: string, dateString: string, createdBy
     update: {},
     include: { class_: true },
   });
-
-  const participants = await getActiveClassMemberships(classId);
 
   const members = participants.map((cp) => ({
     ...cp.participant,
@@ -418,7 +413,10 @@ export async function getSessionById(classId: string, sessionId: string) {
     },
   });
 
-  if (!session) return null;
+  if (!session) {
+    console.log("[Classes] getSessionById - sessão não encontrada", { classId, sessionId });
+    return null;
+  }
 
   const members = await getSessionMembers(
     classId,
@@ -426,9 +424,23 @@ export async function getSessionById(classId: string, sessionId: string) {
     session.attendances.map((a) => a.participantId)
   );
 
+  console.log("[Classes] getSessionById", {
+    classId,
+    sessionId,
+    membersCount: members.length,
+    attendancesCount: session.attendances.length,
+  });
+
   const items = session.attendances.map((a) => ({
+    id: a.id,
     participantId: a.participantId,
     status: a.status,
+    justificationReason: a.justificationReason ?? null,
+    participant: {
+      id: a.participant.id,
+      name: a.participant.name,
+      fullName: a.participant.name,
+    },
   }));
 
   return {
@@ -443,6 +455,19 @@ export async function getSessionById(classId: string, sessionId: string) {
     }),
     items,
   };
+}
+
+const STATUS_PT_TO_EN: Record<string, "present" | "absent" | "justified"> = {
+  presente: "present",
+  ausente: "absent",
+  justificado: "justified",
+  present: "present",
+  absent: "absent",
+  justified: "justified",
+};
+
+function normalizeAttendanceStatus(status: string): "present" | "absent" | "justified" {
+  return STATUS_PT_TO_EN[status] ?? "absent";
 }
 
 export async function putBulkAttendance(
@@ -480,12 +505,12 @@ export async function putBulkAttendance(
         create: {
           sessionId,
           participantId: rec.participantId,
-          status: rec.status as "present" | "absent" | "justified",
+          status: normalizeAttendanceStatus(rec.status),
           justificationReason: rec.notes ?? null,
           recordedBy,
         },
         update: {
-          status: rec.status as "present" | "absent" | "justified",
+          status: normalizeAttendanceStatus(rec.status),
           justificationReason: rec.notes ?? null,
           recordedBy,
         },

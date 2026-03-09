@@ -52,14 +52,17 @@ async function getActiveClassMemberships(classId) {
         orderBy: { participant: { name: "asc" } },
     });
 }
-async function getSessionMembers(classId, sessionDate, attendanceParticipantIds = []) {
-    const { sessionStart, sessionEnd } = getSessionDateBounds(sessionDate);
+/**
+ * Retorna os participantes da turma para uma sessão.
+ * Usa getActiveClassMemberships para garantir consistência com a tela de detalhe da turma
+ * e evitar problemas de timezone com startDate/endDate.
+ */
+async function getSessionMembers(classId, _sessionDate, attendanceParticipantIds = []) {
     const memberships = await prisma_js_1.prisma.classParticipant.findMany({
         where: {
             classId,
-            startDate: { lte: sessionEnd },
-            OR: [{ endDate: null }, { endDate: { gte: sessionStart } }],
             status: "active",
+            participant: { status: "active" },
         },
         include: { participant: true },
         orderBy: [{ participant: { name: "asc" } }, { startDate: "asc" }],
@@ -284,16 +287,20 @@ async function listParticipants(classId) {
     if (!class_)
         throw new Error("Turma não encontrada");
     const participants = await getActiveClassMemberships(classId);
-    return participants.map((cp) => ({
+    const result = participants.map((cp) => ({
         ...cp.participant,
         createdAt: cp.startDate,
     }));
+    console.log("[Classes] listParticipants", { classId, count: result.length });
+    return result;
 }
 async function openSession(classId, dateString, createdByUserId) {
     const sessionDate = (0, dateUtils_js_1.normalizeDateOnly)(dateString);
     const class_ = await prisma_js_1.prisma.class.findUnique({ where: { id: classId } });
     if (!class_)
         throw new Error("Turma não encontrada");
+    const participants = await getActiveClassMemberships(classId);
+    console.log("[Classes] openSession", { classId, dateString, participantsCount: participants.length });
     const session = await prisma_js_1.prisma.classSession.upsert({
         where: {
             classId_sessionDate: { classId, sessionDate },
@@ -306,7 +313,6 @@ async function openSession(classId, dateString, createdByUserId) {
         update: {},
         include: { class_: true },
     });
-    const participants = await getActiveClassMemberships(classId);
     const members = participants.map((cp) => ({
         ...cp.participant,
         createdAt: cp.startDate,
@@ -360,12 +366,27 @@ async function getSessionById(classId, sessionId) {
             },
         },
     });
-    if (!session)
+    if (!session) {
+        console.log("[Classes] getSessionById - sessão não encontrada", { classId, sessionId });
         return null;
+    }
     const members = await getSessionMembers(classId, session.sessionDate, session.attendances.map((a) => a.participantId));
+    console.log("[Classes] getSessionById", {
+        classId,
+        sessionId,
+        membersCount: members.length,
+        attendancesCount: session.attendances.length,
+    });
     const items = session.attendances.map((a) => ({
+        id: a.id,
         participantId: a.participantId,
         status: a.status,
+        justificationReason: a.justificationReason ?? null,
+        participant: {
+            id: a.participant.id,
+            name: a.participant.name,
+            fullName: a.participant.name,
+        },
     }));
     return {
         ...session,
@@ -379,6 +400,17 @@ async function getSessionById(classId, sessionId) {
         }),
         items,
     };
+}
+const STATUS_PT_TO_EN = {
+    presente: "present",
+    ausente: "absent",
+    justificado: "justified",
+    present: "present",
+    absent: "absent",
+    justified: "justified",
+};
+function normalizeAttendanceStatus(status) {
+    return STATUS_PT_TO_EN[status] ?? "absent";
 }
 async function putBulkAttendance(classId, sessionId, records, recordedBy) {
     const session = await prisma_js_1.prisma.classSession.findFirst({
@@ -401,12 +433,12 @@ async function putBulkAttendance(classId, sessionId, records, recordedBy) {
         create: {
             sessionId,
             participantId: rec.participantId,
-            status: rec.status,
+            status: normalizeAttendanceStatus(rec.status),
             justificationReason: rec.notes ?? null,
             recordedBy,
         },
         update: {
-            status: rec.status,
+            status: normalizeAttendanceStatus(rec.status),
             justificationReason: rec.notes ?? null,
             recordedBy,
         },

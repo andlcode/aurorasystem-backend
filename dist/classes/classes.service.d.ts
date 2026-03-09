@@ -345,8 +345,15 @@ export declare function getSessionById(classId: string, sessionId: string): Prom
         notes: string | null;
     }[];
     items: {
+        id: string;
         participantId: string;
         status: import("@prisma/client").$Enums.AttendanceStatus;
+        justificationReason: string | null;
+        participant: {
+            id: string;
+            name: string;
+            fullName: string;
+        };
     }[];
     class_: {
         name: string;
