@@ -47,5 +47,7 @@ router.get("/dashboard", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHand
 router.get("/overview", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.getOverview));
 router.get("/classes", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.getClassesStats));
 router.get("/classes/:id", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHandler)(requireClassOwnerOrAdmin_1.requireClassOwnerOrAdmin), (0, asyncHandler_1.asyncHandler)(statsController.getClassDetailStats));
+router.get("/students", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.listStudents));
+router.get("/students/:id", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.getStudentById));
 exports.statsRoutes = router;
 //# sourceMappingURL=stats.routes.js.map

@@ -1,12 +1,48 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getOverview = getOverview;
 exports.getDashboard = getDashboard;
 exports.getClassesStats = getClassesStats;
 exports.getClassDetailStats = getClassDetailStats;
+exports.listStudents = listStudents;
+exports.getStudentById = getStudentById;
 const prisma_1 = require("../lib/prisma");
 const dateUtils_1 = require("../utils/dateUtils");
 const stats_dto_1 = require("./stats.dto");
+const statsService = __importStar(require("./stats.service"));
 const DASHBOARD_MONTHS = 6;
 const DAY_LABELS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sab"];
 const STATUS_LABELS = {
@@ -669,5 +705,45 @@ async function getClassDetailStats(req, res) {
         year,
         series,
     });
+}
+async function listStudents(req, res) {
+    const parsed = stats_dto_1.studentsQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+        res.status(400).json({ error: "Filtros inválidos", details: parsed.error.errors });
+        return;
+    }
+    const role = req.user?.role ?? req.userRole;
+    const userId = req.user?.userId ?? req.userId;
+    const canViewAll = role === "SUPER_ADMIN" || role === "COORDENADOR";
+    try {
+        const students = await statsService.listStudentsWithStats(parsed.data);
+        res.json(students);
+    }
+    catch (err) {
+        console.error("[Stats] Erro ao listar estatísticas por aluno:", err);
+        res.status(500).json({ error: "Não foi possível carregar as estatísticas." });
+    }
+}
+async function getStudentById(req, res) {
+    const { id: participantId } = req.params;
+    const classId = req.query.classId;
+    const from = req.query.from;
+    const to = req.query.to;
+    try {
+        const detail = await statsService.getStudentStatsById(participantId, {
+            classId,
+            from,
+            to,
+        });
+        if (!detail) {
+            res.status(404).json({ error: "Aluno não encontrado" });
+            return;
+        }
+        res.json(detail);
+    }
+    catch (err) {
+        console.error("[Stats] Erro ao buscar estatísticas do aluno:", err);
+        res.status(500).json({ error: "Não foi possível carregar as estatísticas." });
+    }
 }
 //# sourceMappingURL=stats.controller.js.map

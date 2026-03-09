@@ -34,4 +34,16 @@ router.get(
   asyncHandler(statsController.getClassDetailStats)
 );
 
+router.get(
+  "/students",
+  requireRole("SUPER_ADMIN", "COORDENADOR"),
+  asyncHandler(statsController.listStudents)
+);
+
+router.get(
+  "/students/:id",
+  requireRole("SUPER_ADMIN", "COORDENADOR"),
+  asyncHandler(statsController.getStudentById)
+);
+
 export const statsRoutes = router;

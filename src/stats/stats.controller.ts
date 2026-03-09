@@ -1,7 +1,8 @@
 import type { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { getCurrentMonthRangeBahia } from "../utils/dateUtils";
-import { dashboardQuerySchema } from "./stats.dto";
+import { dashboardQuerySchema, studentsQuerySchema } from "./stats.dto";
+import * as statsService from "./stats.service";
 import type {
   StatsOverviewResponse,
   ClassStatsItem,
@@ -803,4 +804,49 @@ export async function getClassDetailStats(req: Request, res: Response) {
     year,
     series,
   });
+}
+
+export async function listStudents(req: Request, res: Response) {
+  const parsed = studentsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Filtros inválidos", details: parsed.error.errors });
+    return;
+  }
+
+  const role = req.user?.role ?? req.userRole;
+  const userId = req.user?.userId ?? req.userId;
+  const canViewAll = role === "SUPER_ADMIN" || role === "COORDENADOR";
+
+  try {
+    const students = await statsService.listStudentsWithStats(parsed.data);
+    res.json(students);
+  } catch (err) {
+    console.error("[Stats] Erro ao listar estatísticas por aluno:", err);
+    res.status(500).json({ error: "Não foi possível carregar as estatísticas." });
+  }
+}
+
+export async function getStudentById(req: Request, res: Response) {
+  const { id: participantId } = req.params;
+  const classId = req.query.classId as string | undefined;
+  const from = req.query.from as string | undefined;
+  const to = req.query.to as string | undefined;
+
+  try {
+    const detail = await statsService.getStudentStatsById(participantId, {
+      classId,
+      from,
+      to,
+    });
+
+    if (!detail) {
+      res.status(404).json({ error: "Aluno não encontrado" });
+      return;
+    }
+
+    res.json(detail);
+  } catch (err) {
+    console.error("[Stats] Erro ao buscar estatísticas do aluno:", err);
+    res.status(500).json({ error: "Não foi possível carregar as estatísticas." });
+  }
 }

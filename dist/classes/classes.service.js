@@ -32,13 +32,6 @@ const classInclude = {
         include: { participant: true },
     },
 };
-function getSessionDateBounds(sessionDate) {
-    const sessionStart = new Date(sessionDate);
-    sessionStart.setUTCHours(0, 0, 0, 0);
-    const sessionEnd = new Date(sessionDate);
-    sessionEnd.setUTCHours(23, 59, 59, 999);
-    return { sessionStart, sessionEnd };
-}
 async function getActiveClassMemberships(classId) {
     return prisma_js_1.prisma.classParticipant.findMany({
         where: {
