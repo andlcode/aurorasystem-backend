@@ -19,3 +19,14 @@ export const studentsQuerySchema = z.object({
 });
 
 export type StudentsQueryInput = z.infer<typeof studentsQuerySchema>;
+
+export const monthlyAttendanceQuerySchema = z.object({
+  classId: z.string().uuid().optional(),
+  participantId: z.string().uuid().optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  status: z.enum(["all", "active", "inactive"]).optional().default("active"),
+  q: z.string().optional(),
+});
+
+export type MonthlyAttendanceQueryInput = z.infer<typeof monthlyAttendanceQuerySchema>;

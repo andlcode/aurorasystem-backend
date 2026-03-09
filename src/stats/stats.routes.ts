@@ -46,4 +46,16 @@ router.get(
   asyncHandler(statsController.getStudentById)
 );
 
+router.get(
+  "/attendance/students/monthly",
+  requireRole("SUPER_ADMIN", "COORDENADOR"),
+  asyncHandler(statsController.listMonthlyAttendance)
+);
+
+router.get(
+  "/attendance/students/:participantId/monthly",
+  requireRole("SUPER_ADMIN", "COORDENADOR"),
+  asyncHandler(statsController.getMonthlyAttendanceByStudent)
+);
+
 export const statsRoutes = router;

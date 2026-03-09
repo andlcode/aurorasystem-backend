@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { getCurrentMonthRangeBahia } from "../utils/dateUtils";
-import { dashboardQuerySchema, studentsQuerySchema } from "./stats.dto";
+import { dashboardQuerySchema, studentsQuerySchema, monthlyAttendanceQuerySchema } from "./stats.dto";
 import * as statsService from "./stats.service";
 import type {
   StatsOverviewResponse,
@@ -848,5 +848,46 @@ export async function getStudentById(req: Request, res: Response) {
   } catch (err) {
     console.error("[Stats] Erro ao buscar estatísticas do aluno:", err);
     res.status(500).json({ error: "Não foi possível carregar as estatísticas." });
+  }
+}
+
+export async function listMonthlyAttendance(req: Request, res: Response) {
+  const parsed = monthlyAttendanceQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Filtros inválidos", details: parsed.error.errors });
+    return;
+  }
+
+  try {
+    const data = await statsService.listMonthlyAttendanceByStudents(parsed.data);
+    res.json(data);
+  } catch (err) {
+    console.error("[Stats] Erro ao listar estatísticas mensais:", err);
+    res.status(500).json({ error: "Não foi possível carregar as estatísticas mensais." });
+  }
+}
+
+export async function getMonthlyAttendanceByStudent(req: Request, res: Response) {
+  const { participantId } = req.params;
+  const parsed = monthlyAttendanceQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Filtros inválidos", details: parsed.error.errors });
+    return;
+  }
+
+  const { participantId: _pid, ...filters } = parsed.data;
+
+  try {
+    const detail = await statsService.getMonthlyAttendanceByStudentId(participantId, filters);
+
+    if (!detail) {
+      res.status(404).json({ error: "Aluno não encontrado" });
+      return;
+    }
+
+    res.json(detail);
+  } catch (err) {
+    console.error("[Stats] Erro ao buscar estatísticas mensais do aluno:", err);
+    res.status(500).json({ error: "Não foi possível carregar as estatísticas mensais." });
   }
 }

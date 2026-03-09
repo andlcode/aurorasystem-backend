@@ -146,4 +146,39 @@ export interface StatsDashboardResponse {
     recentSessions: DashboardRecentSessionItem[];
     filters: DashboardFiltersMeta;
 }
+export interface MonthlyAttendanceItem {
+    month: string;
+    label: string;
+    present: number;
+    absent: number;
+    total: number;
+    attendanceRate: number;
+}
+export interface MonthlyAttendanceSummary {
+    totalPresent: number;
+    totalAbsent: number;
+    totalSessions: number;
+    attendanceRate: number;
+    consecutiveAbsences: number;
+    lastPresentAt: string | null;
+    lastAbsentAt: string | null;
+}
+export interface MonthlyAttendanceStudentOverview {
+    participantId: string;
+    name: string;
+    classIds: string[];
+    classNames: string[];
+    summary: MonthlyAttendanceSummary;
+    monthly: MonthlyAttendanceItem[];
+}
+export interface MonthlyAttendanceHistoryItem {
+    sessionId: string;
+    sessionDate: string;
+    classId: string;
+    className: string;
+    status: "present" | "absent" | "justified";
+}
+export interface MonthlyAttendanceStudentDetail extends MonthlyAttendanceStudentOverview {
+    history: MonthlyAttendanceHistoryItem[];
+}
 //# sourceMappingURL=stats.types.d.ts.map

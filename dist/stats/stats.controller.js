@@ -39,6 +39,8 @@ exports.getClassesStats = getClassesStats;
 exports.getClassDetailStats = getClassDetailStats;
 exports.listStudents = listStudents;
 exports.getStudentById = getStudentById;
+exports.listMonthlyAttendance = listMonthlyAttendance;
+exports.getMonthlyAttendanceByStudent = getMonthlyAttendanceByStudent;
 const prisma_1 = require("../lib/prisma");
 const dateUtils_1 = require("../utils/dateUtils");
 const stats_dto_1 = require("./stats.dto");
@@ -744,6 +746,42 @@ async function getStudentById(req, res) {
     catch (err) {
         console.error("[Stats] Erro ao buscar estatísticas do aluno:", err);
         res.status(500).json({ error: "Não foi possível carregar as estatísticas." });
+    }
+}
+async function listMonthlyAttendance(req, res) {
+    const parsed = stats_dto_1.monthlyAttendanceQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+        res.status(400).json({ error: "Filtros inválidos", details: parsed.error.errors });
+        return;
+    }
+    try {
+        const data = await statsService.listMonthlyAttendanceByStudents(parsed.data);
+        res.json(data);
+    }
+    catch (err) {
+        console.error("[Stats] Erro ao listar estatísticas mensais:", err);
+        res.status(500).json({ error: "Não foi possível carregar as estatísticas mensais." });
+    }
+}
+async function getMonthlyAttendanceByStudent(req, res) {
+    const { participantId } = req.params;
+    const parsed = stats_dto_1.monthlyAttendanceQuerySchema.safeParse(req.query);
+    if (!parsed.success) {
+        res.status(400).json({ error: "Filtros inválidos", details: parsed.error.errors });
+        return;
+    }
+    const { participantId: _pid, ...filters } = parsed.data;
+    try {
+        const detail = await statsService.getMonthlyAttendanceByStudentId(participantId, filters);
+        if (!detail) {
+            res.status(404).json({ error: "Aluno não encontrado" });
+            return;
+        }
+        res.json(detail);
+    }
+    catch (err) {
+        console.error("[Stats] Erro ao buscar estatísticas mensais do aluno:", err);
+        res.status(500).json({ error: "Não foi possível carregar as estatísticas mensais." });
     }
 }
 //# sourceMappingURL=stats.controller.js.map

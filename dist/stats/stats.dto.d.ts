@@ -39,4 +39,27 @@ export declare const studentsQuerySchema: z.ZodObject<{
     participantIds?: string | undefined;
 }>;
 export type StudentsQueryInput = z.infer<typeof studentsQuerySchema>;
+export declare const monthlyAttendanceQuerySchema: z.ZodObject<{
+    classId: z.ZodOptional<z.ZodString>;
+    participantId: z.ZodOptional<z.ZodString>;
+    startDate: z.ZodOptional<z.ZodString>;
+    endDate: z.ZodOptional<z.ZodString>;
+    status: z.ZodDefault<z.ZodOptional<z.ZodEnum<["all", "active", "inactive"]>>>;
+    q: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    status: "active" | "inactive" | "all";
+    classId?: string | undefined;
+    participantId?: string | undefined;
+    startDate?: string | undefined;
+    endDate?: string | undefined;
+    q?: string | undefined;
+}, {
+    status?: "active" | "inactive" | "all" | undefined;
+    classId?: string | undefined;
+    participantId?: string | undefined;
+    startDate?: string | undefined;
+    endDate?: string | undefined;
+    q?: string | undefined;
+}>;
+export type MonthlyAttendanceQueryInput = z.infer<typeof monthlyAttendanceQuerySchema>;
 //# sourceMappingURL=stats.dto.d.ts.map
