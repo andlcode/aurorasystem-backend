@@ -1,7 +1,12 @@
 import type { Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { getCurrentMonthRangeBahia } from "../utils/dateUtils";
-import { dashboardQuerySchema, studentsQuerySchema, monthlyAttendanceQuerySchema } from "./stats.dto";
+import {
+  dashboardQuerySchema,
+  studentsQuerySchema,
+  monthlyAttendanceQuerySchema,
+  dailyAttendanceQuerySchema,
+} from "./stats.dto";
 import * as statsService from "./stats.service";
 import type {
   StatsOverviewResponse,
@@ -159,8 +164,10 @@ export async function getDashboard(req: Request, res: Response) {
   const role = req.user?.role ?? req.userRole;
   const userId = req.user?.userId ?? req.userId;
   const canViewAll = role === "SUPER_ADMIN" || role === "COORDENADOR";
-  const classWhere = canViewAll ? {} : { responsibleUserId: userId };
+  const classWhere =
+    canViewAll || !userId ? {} : { responsibleUserId: userId };
   const filters = parsed.data;
+  try {
   const filterStart = filters.from ? toUtcDateStart(filters.from) : undefined;
   const filterEnd = filters.to ? toUtcDateEnd(filters.to) : undefined;
   const monthSeries = getMonthSeriesFromRange(filterStart, filterEnd);
@@ -665,6 +672,50 @@ export async function getDashboard(req: Request, res: Response) {
   };
 
   res.json(body);
+  } catch (err) {
+    console.error("[Stats] Erro ao carregar dashboard:", err);
+    const emptyBody: StatsDashboardResponse = {
+      totals: {
+        totalClasses: 0,
+        activeParticipants: 0,
+        sessionsThisMonth: 0,
+        averageAttendance: 0,
+        totalStudents: 0,
+        totalTeamMembers: 0,
+        attendanceRate: 0,
+        totalAttendanceRecords: 0,
+      },
+      attendanceByClass: [],
+      attendanceByMonth: getLastMonthsSeries(DASHBOARD_MONTHS),
+      attendanceByParticipant: [],
+      consecutiveAbsences: [],
+      attendanceByDay: DAY_LABELS.map((label, day) => ({
+        day,
+        label,
+        averageAttendance: 0,
+        totalRecords: 0,
+      })),
+      statusDistribution: [
+        { status: "present", label: STATUS_LABELS.present, count: 0, percentage: 0 },
+        { status: "absent", label: STATUS_LABELS.absent, count: 0, percentage: 0 },
+        { status: "justified", label: STATUS_LABELS.justified, count: 0, percentage: 0 },
+      ],
+      topAbsences: [],
+      mostActiveClasses: [],
+      newStudentsRecently: [],
+      recentSessions: [],
+      filters: {
+        availableClasses: [],
+        selected: {
+          from: filters.from ?? null,
+          to: filters.to ?? null,
+          classId: filters.classId ?? null,
+          status: filters.status,
+        },
+      },
+    };
+    res.json(emptyBody);
+  }
 }
 
 export async function getClassesStats(req: Request, res: Response) {
@@ -864,6 +915,32 @@ export async function listMonthlyAttendance(req: Request, res: Response) {
   } catch (err) {
     console.error("[Stats] Erro ao listar estatísticas mensais:", err);
     res.status(500).json({ error: "Não foi possível carregar as estatísticas mensais." });
+  }
+}
+
+export async function listDiaryAttendanceByClasses(req: Request, res: Response) {
+  const parsed = dailyAttendanceQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Filtros inválidos", details: parsed.error.errors });
+    return;
+  }
+
+  const userId = req.user?.userId ?? req.userId;
+  const role = req.user?.role ?? req.userRole;
+  if (!userId || !role) {
+    res.status(401).json({ error: "Usuário não autenticado" });
+    return;
+  }
+
+  try {
+    const data = await statsService.listDiaryAttendanceByClasses(parsed.data, {
+      userId,
+      role,
+    });
+    res.json(Array.isArray(data) ? data : []);
+  } catch (err) {
+    console.error("[Stats] Erro ao listar diário de presença:", err);
+    res.json([]);
   }
 }
 

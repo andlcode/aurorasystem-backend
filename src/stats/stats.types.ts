@@ -240,3 +240,36 @@ export interface ClassMonthlyAttendanceItem {
   };
   students: ClassMonthlyStudentItem[];
 }
+
+// --- Diário escolar (presença por data) ---
+
+export interface ClassDiaryMonthItem {
+  month: string;
+  label: string;
+  dates: string[];
+}
+
+export interface ClassDiaryStudentItem {
+  participantId: string;
+  name: string;
+  summary: {
+    totalPresent: number;
+    totalAbsent: number;
+    attendanceRate: number;
+    consecutiveAbsences: number;
+  };
+  attendanceByDate: Record<string, "present" | "absent" | "justified">;
+}
+
+export interface ClassDiaryItem {
+  classId: string;
+  className: string;
+  summary: {
+    studentCount: number;
+    attendanceRate: number;
+    totalPresent: number;
+    totalAbsent: number;
+  };
+  months: ClassDiaryMonthItem[];
+  students: ClassDiaryStudentItem[];
+}

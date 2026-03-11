@@ -1,5 +1,10 @@
+import type { UserRole } from "@prisma/client";
 import { prisma } from "../lib/prisma";
-import type { StudentsQueryInput, MonthlyAttendanceQueryInput } from "./stats.dto";
+import type {
+  StudentsQueryInput,
+  MonthlyAttendanceQueryInput,
+  DailyAttendanceQueryInput,
+} from "./stats.dto";
 import type {
   MonthlyAttendanceItem,
   MonthlyAttendanceSummary,
@@ -8,6 +13,9 @@ import type {
   MonthlyAttendanceHistoryItem,
   ClassMonthlyAttendanceItem,
   ClassMonthlyStudentItem,
+  ClassDiaryItem,
+  ClassDiaryMonthItem,
+  ClassDiaryStudentItem,
 } from "./stats.types";
 
 function toDateOnly(value: Date | string): string {
@@ -336,6 +344,18 @@ function getDefaultDateRange(): { start: Date; end: Date } {
   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
   const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1, 0, 0, 0, 0));
   return { start, end };
+}
+
+function getSundaysFrom20260308ToToday(): Date[] {
+  const sundays: Date[] = [];
+  let cursor = new Date(Date.UTC(2026, 2, 8, 0, 0, 0, 0));
+  const today = new Date();
+  today.setUTCHours(23, 59, 59, 999);
+  while (cursor <= today) {
+    sundays.push(new Date(cursor));
+    cursor.setUTCDate(cursor.getUTCDate() + 7);
+  }
+  return sundays;
 }
 
 function buildMonthKeysFromRange(start: Date, end: Date): string[] {
@@ -781,6 +801,189 @@ export async function listMonthlyAttendanceByClasses(
         totalPresent: classTotalPresent,
         totalAbsent: classTotalAbsent,
       },
+      students: sortedStudents,
+    });
+  }
+
+  return result.sort((a, b) => a.className.localeCompare(b.className, "pt-BR"));
+}
+
+export async function listDiaryAttendanceByClasses(
+  filters: DailyAttendanceQueryInput,
+  auth: { userId: string; role: UserRole }
+): Promise<ClassDiaryItem[]> {
+  const sundays = getSundaysFrom20260308ToToday();
+  if (sundays.length === 0) {
+    return [];
+  }
+  const sundayDates = sundays.map((d) =>
+    new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+  );
+
+  const classWhere: Record<string, unknown> = {};
+  if (auth.role === "EVANGELIZADOR") {
+    classWhere.responsibleUserId = auth.userId;
+  } else if (filters.classId) {
+    classWhere.id = filters.classId;
+  }
+
+  const participantWhere: Record<string, unknown> = {};
+  if (filters.status === "active") participantWhere.status = "active";
+  if (filters.status === "inactive") participantWhere.status = "inactive";
+
+  const search = filters.q?.trim();
+  if (search) {
+    participantWhere.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  const classes = await prisma.class.findMany({
+    where: classWhere,
+    include: {
+      sessions: {
+        where: { sessionDate: { in: sundayDates } },
+        select: { id: true, sessionDate: true },
+        orderBy: { sessionDate: "asc" },
+      },
+      participants: {
+        where: {
+          status: "active",
+          ...(Object.keys(participantWhere).length > 0
+            ? { participant: participantWhere }
+            : {}),
+        },
+        include: {
+          participant: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const result: ClassDiaryItem[] = [];
+
+  for (const cls of classes) {
+    const sessionDates = cls.sessions.map((s) => toDateOnly(s.sessionDate));
+    const uniqueDates = [...new Set(sessionDates)].sort();
+
+    const monthGroups = new Map<string, string[]>();
+    for (const d of uniqueDates) {
+      const monthKey = d.slice(0, 7);
+      const list = monthGroups.get(monthKey) ?? [];
+      list.push(d);
+      monthGroups.set(monthKey, list);
+    }
+
+    const months: ClassDiaryMonthItem[] =
+      uniqueDates.length === 0
+        ? []
+        : [...monthGroups.entries()]
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([month, dates]) => ({
+              month,
+              label: getMonthAbbrev(month),
+              dates: dates.sort(),
+            }));
+
+    const participantIds =
+      cls.participants?.map((cp) => cp.participant?.id).filter(Boolean) ?? [];
+
+    const attendances =
+      participantIds.length > 0
+        ? await prisma.attendance.findMany({
+            where: {
+              participantId: { in: participantIds },
+              session: {
+                classId: cls.id,
+                sessionDate: { in: sundayDates },
+              },
+            },
+            select: {
+              participantId: true,
+              status: true,
+              session: { select: { sessionDate: true } },
+            },
+          })
+        : [];
+
+    const attendanceByParticipantAndDate = new Map<string, Map<string, string>>();
+    for (const a of attendances) {
+      const date = toDateOnly(a.session.sessionDate);
+      let byDate = attendanceByParticipantAndDate.get(a.participantId);
+      if (!byDate) {
+        byDate = new Map();
+        attendanceByParticipantAndDate.set(a.participantId, byDate);
+      }
+      byDate.set(date, a.status);
+    }
+
+    const studentsData: ClassDiaryStudentItem[] = [];
+
+    for (const cp of cls.participants ?? []) {
+      const participantId = cp.participant?.id;
+      const participantName = cp.participant?.name ?? "Aluno";
+      if (!participantId) continue;
+
+      const byDate = attendanceByParticipantAndDate.get(participantId) ?? new Map();
+      const attendanceByDate: Record<string, "present" | "absent" | "justified"> = {};
+      let presentCount = 0;
+      let absentCount = 0;
+
+      for (const [date, status] of byDate.entries()) {
+        attendanceByDate[date] = status as "present" | "absent" | "justified";
+        if (status === "present") presentCount++;
+        else if (status === "absent") absentCount++;
+      }
+
+      const total = presentCount + absentCount;
+      const attendanceRate = total > 0 ? roundPercentage((presentCount / total) * 100) : 0;
+
+      const sortedDates = [...byDate.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+      let consecutiveAbsences = 0;
+      for (const [, status] of sortedDates) {
+        if (status === "absent") consecutiveAbsences++;
+        else break;
+      }
+
+      studentsData.push({
+        participantId,
+        name: participantName,
+        summary: {
+          totalPresent: presentCount,
+          totalAbsent: absentCount,
+          attendanceRate,
+          consecutiveAbsences,
+        },
+        attendanceByDate: Object.fromEntries(byDate),
+      });
+    }
+
+    const sortedStudents = studentsData.sort((a, b) =>
+      a.name.localeCompare(b.name, "pt-BR")
+    );
+
+    const classTotalPresent = sortedStudents.reduce((s, st) => s + st.summary.totalPresent, 0);
+    const classTotalAbsent = sortedStudents.reduce((s, st) => s + st.summary.totalAbsent, 0);
+    const classTotal = classTotalPresent + classTotalAbsent;
+    const classAttendanceRate =
+      classTotal > 0 ? roundPercentage((classTotalPresent / classTotal) * 100) : 0;
+
+    result.push({
+      classId: cls.id,
+      className: cls.name,
+      summary: {
+        studentCount: sortedStudents.length,
+        attendanceRate: classAttendanceRate,
+        totalPresent: classTotalPresent,
+        totalAbsent: classTotalAbsent,
+      },
+      months,
       students: sortedStudents,
     });
   }

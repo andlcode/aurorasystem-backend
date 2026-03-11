@@ -59,6 +59,12 @@ router.get(
 );
 
 router.get(
+  "/attendance/classes/daily",
+  requireAuth,
+  asyncHandler(statsController.listDiaryAttendanceByClasses)
+);
+
+router.get(
   "/attendance/students/:participantId/monthly",
   requireRole("SUPER_ADMIN", "COORDENADOR"),
   asyncHandler(statsController.getMonthlyAttendanceByStudent)

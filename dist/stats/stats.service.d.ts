@@ -1,5 +1,5 @@
 import type { StudentsQueryInput, MonthlyAttendanceQueryInput } from "./stats.dto";
-import type { MonthlyAttendanceStudentOverview, MonthlyAttendanceStudentDetail } from "./stats.types";
+import type { MonthlyAttendanceStudentOverview, MonthlyAttendanceStudentDetail, ClassMonthlyAttendanceItem, ClassDiaryItem } from "./stats.types";
 export interface StudentStatsSummary {
     participantId: string;
     name: string;
@@ -35,4 +35,6 @@ export declare function getStudentStatsById(participantId: string, filters: {
 }): Promise<StudentStatsDetail | null>;
 export declare function listMonthlyAttendanceByStudents(filters: MonthlyAttendanceQueryInput): Promise<MonthlyAttendanceStudentOverview[]>;
 export declare function getMonthlyAttendanceByStudentId(participantId: string, filters: Omit<MonthlyAttendanceQueryInput, "participantId">): Promise<MonthlyAttendanceStudentDetail | null>;
+export declare function listMonthlyAttendanceByClasses(filters: MonthlyAttendanceQueryInput): Promise<ClassMonthlyAttendanceItem[]>;
+export declare function listDiaryAttendanceByClasses(filters: MonthlyAttendanceQueryInput): Promise<ClassDiaryItem[]>;
 //# sourceMappingURL=stats.service.d.ts.map

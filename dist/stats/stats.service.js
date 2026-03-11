@@ -4,6 +4,8 @@ exports.listStudentsWithStats = listStudentsWithStats;
 exports.getStudentStatsById = getStudentStatsById;
 exports.listMonthlyAttendanceByStudents = listMonthlyAttendanceByStudents;
 exports.getMonthlyAttendanceByStudentId = getMonthlyAttendanceByStudentId;
+exports.listMonthlyAttendanceByClasses = listMonthlyAttendanceByClasses;
+exports.listDiaryAttendanceByClasses = listDiaryAttendanceByClasses;
 const prisma_1 = require("../lib/prisma");
 function toDateOnly(value) {
     if (typeof value === "string")
@@ -231,9 +233,27 @@ const MONTH_LABELS = {
     11: "Novembro",
     12: "Dezembro",
 };
+const MONTH_ABBREV = {
+    1: "Jan",
+    2: "Fev",
+    3: "Mar",
+    4: "Abr",
+    5: "Mai",
+    6: "Jun",
+    7: "Jul",
+    8: "Ago",
+    9: "Set",
+    10: "Out",
+    11: "Nov",
+    12: "Dez",
+};
 function getMonthLabel(monthKey) {
     const [, m] = monthKey.split("-").map(Number);
     return MONTH_LABELS[m] ?? monthKey;
+}
+function getMonthAbbrev(monthKey) {
+    const [, m] = monthKey.split("-").map(Number);
+    return MONTH_ABBREV[m] ?? monthKey.slice(5, 8);
 }
 function getDefaultDateRange() {
     const now = new Date();
@@ -471,5 +491,324 @@ async function getMonthlyAttendanceByStudentId(participantId, filters) {
         monthly,
         history,
     };
+}
+async function listMonthlyAttendanceByClasses(filters) {
+    const filterStart = filters.startDate
+        ? new Date(`${filters.startDate}T00:00:00.000Z`)
+        : undefined;
+    const filterEnd = filters.endDate
+        ? new Date(`${filters.endDate}T23:59:59.999Z`)
+        : undefined;
+    const { start, end } = filterStart && filterEnd
+        ? { start: filterStart, end: filterEnd }
+        : getDefaultDateRange();
+    const dateWhere = {
+        gte: start,
+        lte: end,
+    };
+    const classWhere = {};
+    if (filters.classId)
+        classWhere.id = filters.classId;
+    const participantWhere = {};
+    if (filters.status === "active")
+        participantWhere.status = "active";
+    if (filters.status === "inactive")
+        participantWhere.status = "inactive";
+    const search = filters.q?.trim();
+    if (search) {
+        participantWhere.OR = [
+            { name: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+        ];
+    }
+    const classes = await prisma_1.prisma.class.findMany({
+        where: classWhere,
+        include: {
+            sessions: {
+                where: { sessionDate: dateWhere },
+                select: { id: true, sessionDate: true },
+            },
+            participants: {
+                where: {
+                    status: "active",
+                    ...(Object.keys(participantWhere).length > 0
+                        ? { participant: participantWhere }
+                        : {}),
+                },
+                include: {
+                    participant: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+    const result = [];
+    for (const cls of classes) {
+        const sessionDates = cls.sessions.map((s) => toDateOnly(s.sessionDate));
+        const monthKeys = [...new Set(sessionDates.map((d) => d.slice(0, 7)))].sort();
+        if (monthKeys.length === 0) {
+            continue;
+        }
+        const availableMonths = monthKeys.map((m) => ({
+            month: m,
+            label: getMonthAbbrev(m),
+        }));
+        const participantIds = cls.participants.map((cp) => cp.participant.id);
+        const attendances = await prisma_1.prisma.attendance.findMany({
+            where: {
+                participantId: { in: participantIds },
+                session: {
+                    classId: cls.id,
+                    sessionDate: dateWhere,
+                },
+            },
+            select: {
+                participantId: true,
+                status: true,
+                session: { select: { sessionDate: true } },
+            },
+        });
+        const recordsByParticipant = new Map();
+        for (const a of attendances) {
+            const rec = {
+                date: toDateOnly(a.session.sessionDate),
+                status: a.status,
+            };
+            const list = recordsByParticipant.get(a.participantId) ?? [];
+            list.push(rec);
+            recordsByParticipant.set(a.participantId, list);
+        }
+        const studentsData = [];
+        for (const cp of cls.participants) {
+            const records = recordsByParticipant.get(cp.participant.id) ?? [];
+            const presentCount = records.filter((r) => r.status === "present").length;
+            const absentCount = records.filter((r) => r.status === "absent").length;
+            const total = presentCount + absentCount;
+            const attendanceRate = total > 0 ? roundPercentage((presentCount / total) * 100) : 0;
+            const sortedByDate = [...records].sort((a, b) => b.date.localeCompare(a.date));
+            let consecutiveAbsences = 0;
+            for (const r of sortedByDate) {
+                if (r.status === "absent")
+                    consecutiveAbsences++;
+                else
+                    break;
+            }
+            const monthData = new Map();
+            for (const r of records) {
+                const key = r.date.slice(0, 7);
+                if (!monthKeys.includes(key))
+                    continue;
+                const cur = monthData.get(key) ?? { present: 0, absent: 0 };
+                if (r.status === "present")
+                    cur.present++;
+                else if (r.status === "absent")
+                    cur.absent++;
+                monthData.set(key, cur);
+            }
+            const monthly = monthKeys.map((m) => {
+                const data = monthData.get(m) ?? { present: 0, absent: 0 };
+                return {
+                    month: m,
+                    label: getMonthAbbrev(m),
+                    present: data.present,
+                    absent: data.absent,
+                };
+            });
+            studentsData.push({
+                participantId: cp.participant.id,
+                name: cp.participant.name,
+                summary: {
+                    totalPresent: presentCount,
+                    totalAbsent: absentCount,
+                    attendanceRate,
+                    consecutiveAbsences,
+                },
+                monthly,
+            });
+        }
+        const sortedStudents = studentsData.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+        const classTotalPresent = sortedStudents.reduce((s, st) => s + st.summary.totalPresent, 0);
+        const classTotalAbsent = sortedStudents.reduce((s, st) => s + st.summary.totalAbsent, 0);
+        const classTotal = classTotalPresent + classTotalAbsent;
+        const classAttendanceRate = classTotal > 0 ? roundPercentage((classTotalPresent / classTotal) * 100) : 0;
+        result.push({
+            classId: cls.id,
+            className: cls.name,
+            availableMonths,
+            summary: {
+                studentCount: sortedStudents.length,
+                attendanceRate: classAttendanceRate,
+                totalPresent: classTotalPresent,
+                totalAbsent: classTotalAbsent,
+            },
+            students: sortedStudents,
+        });
+    }
+    return result.sort((a, b) => a.className.localeCompare(b.className, "pt-BR"));
+}
+async function listDiaryAttendanceByClasses(filters) {
+    const filterStart = filters.startDate
+        ? new Date(`${filters.startDate}T00:00:00.000Z`)
+        : undefined;
+    const filterEnd = filters.endDate
+        ? new Date(`${filters.endDate}T23:59:59.999Z`)
+        : undefined;
+    const { start, end } = filterStart && filterEnd
+        ? { start: filterStart, end: filterEnd }
+        : getDefaultDateRange();
+    const dateWhere = {
+        gte: start,
+        lte: end,
+    };
+    const classWhere = {};
+    if (filters.classId)
+        classWhere.id = filters.classId;
+    const participantWhere = {};
+    if (filters.status === "active")
+        participantWhere.status = "active";
+    if (filters.status === "inactive")
+        participantWhere.status = "inactive";
+    const search = filters.q?.trim();
+    if (search) {
+        participantWhere.OR = [
+            { name: { contains: search, mode: "insensitive" } },
+            { email: { contains: search, mode: "insensitive" } },
+        ];
+    }
+    const classes = await prisma_1.prisma.class.findMany({
+        where: classWhere,
+        include: {
+            sessions: {
+                where: { sessionDate: dateWhere },
+                select: { id: true, sessionDate: true },
+                orderBy: { sessionDate: "asc" },
+            },
+            participants: {
+                where: {
+                    status: "active",
+                    ...(Object.keys(participantWhere).length > 0
+                        ? { participant: participantWhere }
+                        : {}),
+                },
+                include: {
+                    participant: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                    },
+                },
+            },
+        },
+    });
+    const result = [];
+    for (const cls of classes) {
+        const sessionDates = cls.sessions.map((s) => toDateOnly(s.sessionDate));
+        const uniqueDates = [...new Set(sessionDates)].sort();
+        const monthGroups = new Map();
+        for (const d of uniqueDates) {
+            const monthKey = d.slice(0, 7);
+            const list = monthGroups.get(monthKey) ?? [];
+            list.push(d);
+            monthGroups.set(monthKey, list);
+        }
+        const months = uniqueDates.length === 0
+            ? []
+            : [...monthGroups.entries()]
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([month, dates]) => ({
+                month,
+                label: getMonthAbbrev(month),
+                dates: dates.sort(),
+            }));
+        const participantIds = cls.participants?.map((cp) => cp.participant?.id).filter(Boolean) ?? [];
+        const attendances = participantIds.length > 0
+            ? await prisma_1.prisma.attendance.findMany({
+                where: {
+                    participantId: { in: participantIds },
+                    session: {
+                        classId: cls.id,
+                        sessionDate: dateWhere,
+                    },
+                },
+                select: {
+                    participantId: true,
+                    status: true,
+                    session: { select: { sessionDate: true } },
+                },
+            })
+            : [];
+        const attendanceByParticipantAndDate = new Map();
+        for (const a of attendances) {
+            const date = toDateOnly(a.session.sessionDate);
+            let byDate = attendanceByParticipantAndDate.get(a.participantId);
+            if (!byDate) {
+                byDate = new Map();
+                attendanceByParticipantAndDate.set(a.participantId, byDate);
+            }
+            byDate.set(date, a.status);
+        }
+        const studentsData = [];
+        for (const cp of cls.participants ?? []) {
+            const participantId = cp.participant?.id;
+            const participantName = cp.participant?.name ?? "Aluno";
+            if (!participantId)
+                continue;
+            const byDate = attendanceByParticipantAndDate.get(participantId) ?? new Map();
+            const attendanceByDate = {};
+            let presentCount = 0;
+            let absentCount = 0;
+            for (const [date, status] of byDate.entries()) {
+                attendanceByDate[date] = status;
+                if (status === "present")
+                    presentCount++;
+                else if (status === "absent")
+                    absentCount++;
+            }
+            const total = presentCount + absentCount;
+            const attendanceRate = total > 0 ? roundPercentage((presentCount / total) * 100) : 0;
+            const sortedDates = [...byDate.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+            let consecutiveAbsences = 0;
+            for (const [, status] of sortedDates) {
+                if (status === "absent")
+                    consecutiveAbsences++;
+                else
+                    break;
+            }
+            studentsData.push({
+                participantId,
+                name: participantName,
+                summary: {
+                    totalPresent: presentCount,
+                    totalAbsent: absentCount,
+                    attendanceRate,
+                    consecutiveAbsences,
+                },
+                attendanceByDate: Object.fromEntries(byDate),
+            });
+        }
+        const sortedStudents = studentsData.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
+        const classTotalPresent = sortedStudents.reduce((s, st) => s + st.summary.totalPresent, 0);
+        const classTotalAbsent = sortedStudents.reduce((s, st) => s + st.summary.totalAbsent, 0);
+        const classTotal = classTotalPresent + classTotalAbsent;
+        const classAttendanceRate = classTotal > 0 ? roundPercentage((classTotalPresent / classTotal) * 100) : 0;
+        result.push({
+            classId: cls.id,
+            className: cls.name,
+            summary: {
+                studentCount: sortedStudents.length,
+                attendanceRate: classAttendanceRate,
+                totalPresent: classTotalPresent,
+                totalAbsent: classTotalAbsent,
+            },
+            months,
+            students: sortedStudents,
+        });
+    }
+    return result.sort((a, b) => a.className.localeCompare(b.className, "pt-BR"));
 }
 //# sourceMappingURL=stats.service.js.map

@@ -50,6 +50,8 @@ router.get("/classes/:id", requireAuth_1.requireAuth, (0, asyncHandler_1.asyncHa
 router.get("/students", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.listStudents));
 router.get("/students/:id", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.getStudentById));
 router.get("/attendance/students/monthly", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.listMonthlyAttendance));
+router.get("/attendance/classes/monthly", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.listMonthlyAttendanceByClasses));
+router.get("/attendance/classes/daily", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.listDiaryAttendanceByClasses));
 router.get("/attendance/students/:participantId/monthly", (0, requireRole_1.requireRole)("SUPER_ADMIN", "COORDENADOR"), (0, asyncHandler_1.asyncHandler)(statsController.getMonthlyAttendanceByStudent));
 exports.statsRoutes = router;
 //# sourceMappingURL=stats.routes.js.map

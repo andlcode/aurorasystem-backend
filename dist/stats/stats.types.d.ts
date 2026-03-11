@@ -181,4 +181,63 @@ export interface MonthlyAttendanceHistoryItem {
 export interface MonthlyAttendanceStudentDetail extends MonthlyAttendanceStudentOverview {
     history: MonthlyAttendanceHistoryItem[];
 }
+export interface ClassMonthlyStudentItem {
+    participantId: string;
+    name: string;
+    summary: {
+        totalPresent: number;
+        totalAbsent: number;
+        attendanceRate: number;
+        consecutiveAbsences: number;
+    };
+    monthly: Array<{
+        month: string;
+        label: string;
+        present: number;
+        absent: number;
+    }>;
+}
+export interface ClassMonthlyAttendanceItem {
+    classId: string;
+    className: string;
+    availableMonths: Array<{
+        month: string;
+        label: string;
+    }>;
+    summary: {
+        studentCount: number;
+        attendanceRate: number;
+        totalPresent: number;
+        totalAbsent: number;
+    };
+    students: ClassMonthlyStudentItem[];
+}
+export interface ClassDiaryMonthItem {
+    month: string;
+    label: string;
+    dates: string[];
+}
+export interface ClassDiaryStudentItem {
+    participantId: string;
+    name: string;
+    summary: {
+        totalPresent: number;
+        totalAbsent: number;
+        attendanceRate: number;
+        consecutiveAbsences: number;
+    };
+    attendanceByDate: Record<string, "present" | "absent" | "justified">;
+}
+export interface ClassDiaryItem {
+    classId: string;
+    className: string;
+    summary: {
+        studentCount: number;
+        attendanceRate: number;
+        totalPresent: number;
+        totalAbsent: number;
+    };
+    months: ClassDiaryMonthItem[];
+    students: ClassDiaryStudentItem[];
+}
 //# sourceMappingURL=stats.types.d.ts.map

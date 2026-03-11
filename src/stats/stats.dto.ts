@@ -30,3 +30,11 @@ export const monthlyAttendanceQuerySchema = z.object({
 });
 
 export type MonthlyAttendanceQueryInput = z.infer<typeof monthlyAttendanceQuerySchema>;
+
+export const dailyAttendanceQuerySchema = z.object({
+  classId: z.string().uuid().optional(),
+  status: z.enum(["all", "active", "inactive"]).optional().default("active"),
+  q: z.string().optional(),
+});
+
+export type DailyAttendanceQueryInput = z.infer<typeof dailyAttendanceQuerySchema>;
